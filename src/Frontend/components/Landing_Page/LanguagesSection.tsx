@@ -1,4 +1,11 @@
+import { onCleanup, onMount } from "solid-js";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import LanguageCard from "./LanguageCard";
+import { GsapForCards } from "../../pages/Gsap";
+
+// Register the plugin
+gsap.registerPlugin(ScrollTrigger);
 
 interface Language {
   language: string;
@@ -407,66 +414,42 @@ export default function LanguagesSection() {
     // Add your navigation logic here
   };
 
+  let parentRef: HTMLDivElement | undefined;
+
+  // onMount(() => {
+  //   if (!parentRef) return;
+
+  //   // Cleanup
+  //   onCleanup(() => {
+  //     ScrollTrigger.getAll().forEach((instance) => instance.kill());
+  //   });
+  // });
+  onMount(() => {
+    GsapForCards(parentRef);
+  });
   return (
     <section
       id='supported_languages_section'
-      class='w-full py-20 bg-gradient-to-b from-gray-50 to-white'>
-      <div class='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
-        {/* Section Header */}
-        <div class='text-center space-y-6 mb-20'>
-          <div class='space-y-4'>
-            <h2 class='section-title text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-800 font-montserrat tracking-wider opacity-0 transform translate-y-10'>
-              Major Supported Languages
-            </h2>
-            <div class='w-24 h-1 bg-gradient-to-r from-blue-500 to-purple-600 mx-auto rounded-full opacity-0 transform scale-x-0'></div>
-            <p class='section-subtitle text-lg sm:text-xl text-neutral-700 font-normal font-inter leading-relaxed tracking-wide max-w-2xl mx-auto opacity-0 transform translate-y-5'>
-              Learn while working or studying from any place, across any device.
-              Master the most popular programming languages with our interactive
-              platform.
-            </p>
-          </div>
-        </div>
-
-        {/* Language Cards Container */}
-        <div class='languages-container flex flex-wrap gap-10 cards-wrapper overflow-hidden'>
-          {languages.map((lang) => (
-            <LanguageCard
-              data-key={lang.language}
-              language={lang.language}
-              tagline={lang.tagline}
-              description={lang.description}
-              features={lang.features}
-              logoSrc={lang.logoSrc}
-              gradientColors={lang.gradientColors}
-              accentColor={lang.accentColor}
-              onGetStarted={() => handleGetStarted(lang.language)}
-              onLearnMore={() => handleLearnMore(lang.language)}
-            />
-          ))}
-        </div>
-
-        {/* Bottom CTA Section */}
-        <div class='text-center mt-20 pt-16 border-t border-gray-200'>
-          <div
-            class='space-y-6 opacity-0 transform translate-y-10'
-            id='bottom-cta'>
-            <h3 class='text-3xl sm:text-4xl font-bold text-gray-800'>
-              Ready to Start Your Journey?
-            </h3>
-            <p class='text-lg text-gray-600 max-w-2xl mx-auto'>
-              Choose your favorite language and begin building amazing projects
-              today. Our interactive platform adapts to your learning style.
-            </p>
-            <div class='flex flex-col sm:flex-row gap-4 justify-center items-center'>
-              <button class='px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300'>
-                Explore All Languages
-              </button>
-              <button class='px-8 py-4 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold text-lg hover:border-blue-500 hover:text-blue-600 transition-all duration-300'>
-                View Learning Paths
-              </button>
-            </div>
-          </div>
-        </div>
+      class='py-20 bg-gradient-to-b from-gray-50 to-white overflow-hidden relative'>
+      {/* Horizontal scroll container */}
+      <div
+        ref={parentRef}
+        class='parent relative h-[90vh]'
+        style={{ width: `${languages.length * 80}vw` }}>
+        {languages.map((lang, i) => (
+          <LanguageCard
+            data-key={lang.language}
+            language={lang.language}
+            tagline={lang.tagline}
+            description={lang.description}
+            features={lang.features}
+            logoSrc={lang.logoSrc}
+            gradientColors={lang.gradientColors}
+            accentColor={lang.accentColor}
+            onGetStarted={() => handleGetStarted(lang.language)}
+            onLearnMore={() => handleLearnMore(lang.language)}
+          />
+        ))}
       </div>
     </section>
   );

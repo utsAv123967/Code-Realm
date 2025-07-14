@@ -219,7 +219,7 @@ const LanguageCard: Component<LanguageCardProps> = (props) => {
 
   return (
     <div
-      class='language-card w-[90vw] h-[90vh] mx-auto mb-4 opacity-100 transform translate-y-0 card flex items-center justify-center'
+      class='card absolute w-[80vw] h-[80vh] opacity-100'
       data-language={props.language.toLowerCase()}>
       <div class='bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 hover:shadow-3xl transition-all duration-500 w-full h-full'>
         <div class='flex flex-col lg:flex-row h-full'>
