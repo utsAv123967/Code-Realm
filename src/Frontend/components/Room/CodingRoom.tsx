@@ -84,7 +84,7 @@ export default function CodeRealm() {
   };
 
   // Helper function to get default content based on language
-  const getDefaultContent = (language) => {
+  const getDefaultContent = (language: any) => {
     if (language.includes("JavaScript")) {
       return "console.log('Hello World!');";
     } else if (language.includes("Python")) {
@@ -119,7 +119,7 @@ int main() {
     setActiveFileIndex(index);
     const file = files()[index];
     if (file) {
-      setCode(file.content);
+      setCode(file.body);
       setSelectedLanguage(file.language);
     }
     console.log("Switch to file index:", index);
