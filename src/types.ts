@@ -4,33 +4,36 @@ export interface file_objects {
   language: string;
 }
 
-
+export type RoomType = "All" | "Protected";
 export interface Room {
-  id: string;
-  name: string;
-  language: string;
-  members: number;
-  owner: string;
-  lastActivity: string;
-  isActive: boolean;
-  type: 'public' | 'private' | 'temporary';
-  createdAt: Date;
-  description?: string;
-  tags?: string[];
+  Applicants?:  object[];  
+  Createdby: string; 
+  Description: string;  
+  Messages:object[];        // Applicants (optional)                        // doc.id
+  Name: string;                        // Messages.Name
+  RoomId: string;                      // updatedAt (Firestore Timestamp)
+  Tags?: string[];                     // Tags (optional)
+  Users?: string[];   
+  createdAt:Date,
+  updatedAt:Date,                 // Users (optional)
+  files?: string[];      
+  isActive:boolean;
+  type: RoomType;
 }
 
-export  interface User {
-  id: string;
-  name: string;
-  avatar: string;
-  status: 'online' | 'offline' | 'busy';
-}
 
 export interface ActivityItem {
   id: string;
-  type: 'join' | 'create' | 'code' | 'message';
+  type: 'join' | 'create' | 'code' | 'message' | 'leave' | 'file' | 'comment' | 'invite' | 'help' | 'share' | 'edit';
   roomName: string;
   user: string;
   timestamp: Date;
   description: string;
+  metadata?: {
+    fileName?: string;
+    language?: string;
+    lineCount?: number;
+    collaborators?: string[];
+    tags?: string[];
+  };
 }

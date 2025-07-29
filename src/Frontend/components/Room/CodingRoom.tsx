@@ -1,67 +1,230 @@
-import { createSignal, For } from "solid-js";
+import { createSignal, For, Show, onMount } from "solid-js";
+import { useParams, useNavigate } from "@solidjs/router";
 import {
   FiUsers,
   FiMessageSquare,
   FiTerminal,
-  FiCode,
-  FiChevronDown,
   FiLogOut,
-  FiClock,
   FiPlay,
   FiFile,
   FiPlus,
   FiFileText,
 } from "solid-icons/fi";
 import { languages } from "../../../../languages.ts";
+import { userId } from "../../../context/Userdetails";
+import { useRoomContext } from "../../context/RoomContext";
 
 // import setUser from "../../../Backend/Database/SetUser.ts";
 import CreateFileModal from "../../modals/createFile.tsx";
-import type { file_objects } from "../../../types.ts";
+import { TeamChatModal } from "../../modals/teamChatModal.tsx";
+import type { file_objects, Room } from "../../../types.ts";
 
-export default function CodeRealm() {
-  const [selectedLanguage, setSelectedLanguage] = createSignal(
-    languages[0].name
+export default function CodingRoom() {
+  const params = useParams();
+  const navigate = useNavigate();
+  const roomContext = useRoomContext();
+
+  // Room state
+  const [room, setRoom] = createSignal<Room | undefined>(
+    roomContext.currentRoom()
   );
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | undefined>(undefined);
+  const [hasAccess, setHasAccess] = createSignal(false);
+
+  // Check if user has access to this room
+  const checkRoomAccess = (roomData: Room): boolean => {
+    const currentUserId = userId();
+    if (!currentUserId) return false;
+
+    // User can access if they created the room or are in the Users array
+    const isCreator = roomData.Createdby === currentUserId;
+    const isJoined = roomData.Users?.includes(currentUserId) || false;
+
+    return isCreator || isJoined;
+  };
+
+  // Load room data using context
+  const loadRoomData = async () => {
+    if (!params.roomId) {
+      setError("Room ID not provided");
+      setLoading(false);
+      return;
+    }
+
+    if (!userId()) {
+      setError("You must be logged in to access rooms");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log("🔍 Looking for room in context:", params.roomId);
+
+      // First check if room is already set as current room in context
+      let roomData = roomContext.currentRoom();
+      if (roomData && roomData.RoomId === params.roomId) {
+        console.log("✅ Room found in context as current room");
+      } else {
+        // Check if room is in cached rooms
+        roomData = roomContext.getRoomById(params.roomId);
+
+        // If not in cache, try to refresh context
+        if (!roomData) {
+          console.log("🔄 Room not in cache, refreshing context...");
+          await roomContext.refreshRooms();
+          roomData = roomContext.getRoomById(params.roomId);
+        }
+      }
+
+      if (!roomData) {
+        setError("Room not found");
+        setLoading(false);
+        return;
+      }
+
+      setRoom(roomData);
+
+      // Check access
+      const accessGranted = checkRoomAccess(roomData);
+      setHasAccess(accessGranted);
+
+      if (!accessGranted) {
+        setError("You don't have permission to access this room");
+      } else {
+        console.log("✅ Room loaded successfully:", roomData.Name);
+        // Set as current room in context for future reference
+        roomContext.setCurrentRoom(roomData);
+
+        // Initialize messages with room data if available
+        if (roomData.Messages && roomData.Messages.length > 0) {
+          const roomMessages = roomData.Messages.map(
+            (msg: any, index: number) => ({
+              id: index + 1,
+              sender: msg.sender || "Unknown User",
+              content: msg.content || msg.message || "",
+              timestamp:
+                msg.timestamp ||
+                new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+            })
+          );
+          setMessages(roomMessages);
+        } else {
+          // Set welcome message with room name
+          setMessages([
+            {
+              id: 1,
+              sender: "AI Assistant",
+              content: `Welcome to ${roomData.Name}! I'm here to help you with your coding. Ask me anything!`,
+              timestamp: new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            },
+          ]);
+        }
+
+        // Initialize files from room data if available
+        if (roomData.files && roomData.files.length > 0) {
+          // Note: Room.files is string[] but we need file_objects[]
+          // For now, create default file objects based on file names
+          const roomFiles = roomData.files.map((fileName: string) => ({
+            name: fileName,
+            body: "// File content will be loaded here...",
+            language: getLanguageFromFileName(fileName),
+          }));
+          setFiles(roomFiles);
+          if (roomFiles.length > 0) {
+            setActiveFileIndex(0);
+            setCode(roomFiles[0].body);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("❌ Error loading room data:", err);
+      setError("Failed to load room data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  onMount(() => {
+    console.log("🎯 CodingRoom mounted with params:", params);
+    console.log("🔑 Room ID from URL:", params.roomId);
+    loadRoomData();
+  });
+  // const RoomID =
   const [code, setCode] = createSignal("//write Code");
   const [input, setInput] = createSignal("");
   const [output, setOutput] = createSignal("");
   const [aiMessage, setAiMessage] = createSignal("");
-  const [showLanguageDropdown, setShowLanguageDropdown] = createSignal(false);
+
   const [showOutput, setShowOutput] = createSignal(false);
   const [isRunning, setIsRunning] = createSignal(false);
 
   const [files, setFiles] = createSignal<file_objects[]>([]);
   const [activeFileIndex, setActiveFileIndex] = createSignal(0);
   const [showCreateFileModal, setShowCreateFileModal] = createSignal(false);
+  const [showMemberChatModal, setShowMemberChatModal] = createSignal(false);
+
+  // Initialize messages from room data - use default value
   const [messages, setMessages] = createSignal([
     {
       id: 1,
       sender: "AI Assistant",
-      content: "Hello! I'm here to help you with your coding. Ask me anything!",
-      timestamp: "10:30 AM",
-    },
-    {
-      id: 2,
-      sender: "You",
-      content: "How can I optimize this algorithm?",
-      timestamp: "10:31 AM",
-    },
-    {
-      id: 3,
-      sender: "AI Assistant",
       content:
-        "I can help you optimize your algorithm. Could you share the specific code you'd like me to review?",
-      timestamp: "10:32 AM",
+        "Welcome! I'm here to help you with your coding. Ask me anything!",
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
     },
   ]);
 
-  const connectedUsers = [
-    { name: "Utsav", online: true, color: "#10B981" },
-    { name: "Raj", online: true, color: "#3B82F6" },
-    { name: "Aman", online: true, color: "#8B5CF6" },
-    { name: "Gaurav", online: false, color: "#F59E0B" },
-    { name: "Ravi", online: false, color: "#EF4444" },
-  ];
+  // Generate connected users from room data
+  const connectedUsers = () => {
+    const currentRoom = room();
+    if (!currentRoom) return [];
+
+    const users = [];
+    const colors = [
+      "#10B981",
+      "#3B82F6",
+      "#8B5CF6",
+      "#F59E0B",
+      "#EF4444",
+      "#06B6D4",
+      "#84CC16",
+    ];
+
+    // Add room creator
+    users.push({
+      name: currentRoom.Createdby,
+      online: true, // Assume creator is online
+      color: colors[0],
+      isCreator: true,
+    });
+
+    // Add other users
+    if (currentRoom.Users) {
+      currentRoom.Users.forEach((user, index) => {
+        if (user !== currentRoom.Createdby) {
+          // Don't add creator twice
+          users.push({
+            name: user,
+            online: Math.random() > 0.3, // Random online status for demo
+            color: colors[(index + 1) % colors.length],
+            isCreator: false,
+          });
+        }
+      });
+    }
+
+    return users;
+  };
 
   // Empty function for creating new file - you can implement this
   const createNewFile = () => {
@@ -76,11 +239,41 @@ export default function CodeRealm() {
       body: getDefaultContent(language),
       language: language,
     };
-
+    // AddFile(newFile);
     setFiles([...files(), newFile]);
-    setActiveFileIndex(files().length); // Switch to the new file
+    setActiveFileIndex(files().length - 1); // Switch to the new file
     setCode(newFile.body);
     console.log("File created:", newFile);
+  };
+
+  // Helper function to get language from filename
+  const getLanguageFromFileName = (fileName: string): string => {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    switch (extension) {
+      case "js":
+        return "JavaScript";
+      case "ts":
+        return "TypeScript";
+      case "py":
+        return "Python";
+      case "cpp":
+      case "cc":
+        return "C++";
+      case "c":
+        return "C";
+      case "java":
+        return "Java";
+      case "go":
+        return "Go";
+      case "rs":
+        return "Rust";
+      case "php":
+        return "PHP";
+      case "rb":
+        return "Ruby";
+      default:
+        return "JavaScript"; // Default fallback
+    }
   };
 
   // Helper function to get default content based on language
@@ -114,13 +307,11 @@ int main() {
     return "// Start coding here...";
   };
 
-  // Empty function for switching between files - you can implement this
   const switchToFile = (index: number) => {
     setActiveFileIndex(index);
     const file = files()[index];
     if (file) {
       setCode(file.body);
-      setSelectedLanguage(file.language);
     }
     console.log("Switch to file index:", index);
   };
@@ -130,8 +321,28 @@ int main() {
     setShowOutput(true);
     setOutput("Compiling and executing...");
 
-    const id = languages.filter((lang) => lang.name === selectedLanguage())[0]
-      ?.id;
+    // Check if there are files and active file exists
+    const activeFile = files()[activeFileIndex()];
+    if (!activeFile) {
+      setOutput("Error: No active file selected");
+      setIsRunning(false);
+      return;
+    }
+
+    console.log(code());
+    console.log(activeFile.language);
+
+    const languageMatch = languages.find(
+      (lang) => lang.name === activeFile.language
+    );
+
+    if (!languageMatch) {
+      setOutput("Error: Language not supported");
+      setIsRunning(false);
+      return;
+    }
+
+    const id = languageMatch.id;
 
     try {
       const res = await fetch("http://localhost:5000/api/compile", {
@@ -195,335 +406,25 @@ int main() {
   };
 
   return (
-    <div class='w-screen h-screen bg-gray-50 overflow-hidden flex flex-col'>
-      {/* Header */}
-      <header class='bg-white border-b border-gray-200 px-6 py-4 shadow-sm'>
-        <div class='flex items-center justify-between'>
-          <div class='flex items-center gap-4'>
-            <div class='flex items-center gap-2'>
-              <FiCode class='text-blue-600 text-xl' />
-              <h1 class='text-xl font-bold text-gray-900'>CodeRealm</h1>
-            </div>
-            <div class='h-6 w-px bg-gray-300'></div>
-            <span class='text-sm text-gray-600'>Room: #Algorithm-Practice</span>
-          </div>
-
-          <button class='flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors'>
-            <FiLogOut class='text-sm' />
-            <span class='text-sm font-medium'>Exit Room</span>
-          </button>
-        </div>
-      </header>
-
-      <div class='flex flex-1 overflow-hidden'>
-        {/* Left Sidebar - Users and Files */}
-        <aside class='w-72 bg-white border-r border-gray-200 flex flex-col'>
-          {/* Connected Users */}
-          <div class='p-6 border-b border-gray-100'>
-            <div class='flex items-center gap-2 mb-4'>
-              <FiUsers class='text-gray-600' />
-              <h2 class='text-sm font-semibold text-gray-900'>
-                Connected Users ({connectedUsers.length})
-              </h2>
-            </div>
-
-            <div class='space-y-3'>
-              <For each={connectedUsers}>
-                {(user) => (
-                  <div class='flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50'>
-                    <div
-                      class={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${
-                        user.online ? "" : "opacity-50"
-                      }`}
-                      style={{ "background-color": user.color }}>
-                      {user.name.charAt(0)}
-                    </div>
-                    <div class='flex-1'>
-                      <span class='text-sm font-medium text-gray-900'>
-                        {user.name}
-                      </span>
-                      <div class='flex items-center gap-2 mt-1'>
-                        <div
-                          class={`w-2 h-2 rounded-full ${
-                            user.online ? "bg-green-500" : "bg-gray-400"
-                          }`}></div>
-                        <span class='text-xs text-gray-500'>
-                          {user.online ? "Online" : "Offline"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-
-          {/* Files Section */}
-          <div class='flex-1 p-6'>
-            <div class='flex items-center justify-between mb-4'>
-              <div class='flex items-center gap-2'>
-                <FiFile class='text-gray-600' />
-                <h3 class='text-sm font-semibold text-gray-900'>
-                  Project Files
-                </h3>
+    <Show
+      when={!loading() && !error() && hasAccess() && room()}
+      fallback={
+        <div class='flex items-center justify-center min-h-screen bg-gray-50'>
+          <Show when={loading()}>
+            <div class='text-center'>
+              <div class='w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse'>
+                <div class='w-6 h-6 bg-blue-600 rounded-full animate-ping'></div>
               </div>
-              <button
-                onClick={createNewFile}
-                class='p-2 hover:bg-gray-100 rounded-lg transition-colors group'
-                title='Create new file'>
-                <FiPlus class='text-gray-600 text-sm group-hover:text-blue-600' />
-              </button>
+              <p class='text-lg text-gray-600'>Loading room...</p>
+              <p class='text-sm text-gray-500 mt-2'>Room ID: {params.roomId}</p>
             </div>
+          </Show>
 
-            {/* Show files if any exist */}
-            {files().length > 0 ? (
-              <div class='space-y-2'>
-                <For each={files()}>
-                  {(file: file_objects, index) => (
-                    <div
-                      onClick={() => switchToFile(index())}
-                      class={`p-3 rounded-lg cursor-pointer transition-colors ${
-                        index() === activeFileIndex()
-                          ? "bg-blue-50 border border-blue-200"
-                          : "hover:bg-gray-50"
-                      }`}>
-                      <span
-                        class={`text-sm font-medium ${
-                          index() === activeFileIndex()
-                            ? "text-blue-700"
-                            : "text-gray-700"
-                        }`}>
-                        {file.name}
-                      </span>
-                    </div>
-                  )}
-                </For>
-              </div>
-            ) : (
-              /* Show empty state when no files */
-              <div class='flex flex-col items-center justify-center py-8 text-center'>
-                <div class='w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4'>
-                  <FiFileText class='text-gray-400 text-2xl' />
-                </div>
-                <p class='text-sm text-gray-500 mb-3'>No files yet</p>
-                <button
-                  onClick={createNewFile}
-                  class='flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm'>
-                  <FiPlus class='text-sm' />
-                  <span>Create File</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </aside>
-
-        {/* Main Content Area */}
-        <main class='flex-1 flex flex-col overflow-hidden'>
-          {/* Code Editor Header */}
-          <div class='bg-white border-b border-gray-200 px-6 py-4'>
-            <div class='flex items-center justify-between'>
-              <div class='flex items-center gap-4'>
-                <h2 class='text-lg font-semibold text-gray-900'>
-                  {files().length > 0 && files()[activeFileIndex()]
-                    ? files()[activeFileIndex()].name
-                    : "Code Editor"}
-                </h2>
-
-                {/* Language Selector */}
-                <div class='relative'>
-                  <button
-                    onClick={() =>
-                      setShowLanguageDropdown(!showLanguageDropdown())
-                    }
-                    class='px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg flex items-center gap-2 hover:bg-gray-200 transition-colors text-sm'>
-                    <span class='text-gray-700 font-medium'>
-                      {selectedLanguage()}
-                    </span>
-                    <FiChevronDown class='text-gray-500' />
-                  </button>
-
-                  {showLanguageDropdown() && (
-                    <div class='absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-20 min-w-64 max-h-60 overflow-y-auto'>
-                      <For each={languages}>
-                        {(lang) => (
-                          <button
-                            class='block w-full px-4 py-2 text-left hover:bg-gray-50 text-sm text-gray-700'
-                            onClick={() => {
-                              setSelectedLanguage(lang.name);
-                              setShowLanguageDropdown(false);
-                            }}>
-                            {lang.name}
-                          </button>
-                        )}
-                      </For>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <button
-                class={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-all ${
-                  isRunning()
-                    ? "bg-gray-400 text-white cursor-not-allowed"
-                    : "bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md"
-                }`}
-                onClick={runCode}
-                disabled={isRunning()}>
-                <FiPlay class='text-sm' />
-                <span>{isRunning() ? "Running..." : "Run Code"}</span>
-              </button>
-            </div>
-          </div>
-          {/* Code Editor */}
-          <div class='flex-1 p-6'>
-            {files().length > 0 ? (
-              /* Show code editor when files exist */
-              <div class='h-full bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden'>
-                <div class='h-full p-4'>
-                  <textarea
-                    class='w-full h-full bg-transparent resize-none outline-none text-gray-800 font-mono text-base leading-relaxed'
-                    value={code()}
-                    onInput={(e) => {
-                      setCode(e.target.value);
-                    }}
-                    placeholder='// Start coding here...'
-                    spellcheck={false}
-                  />
-                </div>
-              </div>
-            ) : (
-              /* Show create file prompt in center when no files */
-              <div class='h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center'>
-                <div class='text-center'>
-                  <div class='w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6'>
-                    <FiFileText class='text-gray-400 text-4xl' />
-                  </div>
-                  <h3 class='text-lg font-semibold text-gray-900 mb-2'>
-                    No files open
-                  </h3>
-                  <p class='text-gray-500 mb-6 max-w-sm'>
-                    Create your first file to start coding. You can create files
-                    for different programming languages.
-                  </p>
-                  <button
-                    onClick={createNewFile}
-                    class='flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto'>
-                    <FiPlus class='text-sm' />
-                    <span>Create Your First File</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          {showCreateFileModal() ? (
-            <CreateFileModal
-              isOpen={showCreateFileModal()}
-              onClose={() => setShowCreateFileModal(false)}
-              onCreateFile={handleCreateFile}
-              languages={languages}
-            />
-          ) : null}
-          {/* Input/Output Section */}
-          {files().length > 0 ? (
-            <div class='bg-gray-50 border-t border-gray-200 p-6'>
-              <div class='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-                {/* Input */}
-                <div class='bg-white rounded-lg border border-gray-200 shadow-sm'>
-                  <div class='px-4 py-3 border-b border-gray-100 bg-gray-50 rounded-t-lg'>
-                    <div class='flex items-center gap-2'>
-                      <FiTerminal class='text-gray-600 text-sm' />
-                      <h3 class='text-sm font-semibold text-gray-900'>Input</h3>
-                    </div>
-                  </div>
-                  <div class='p-4'>
-                    <textarea
-                      class='w-full h-32 bg-transparent resize-none outline-none text-gray-800 font-mono text-sm leading-relaxed'
-                      value={input()}
-                      onInput={(e) => setInput(e.target.value)}
-                      placeholder='Enter input here...'
-                    />
-                  </div>
-                </div>
-
-                {/* Output */}
-                {showOutput() && (
-                  <div class='bg-white rounded-lg border border-gray-200 shadow-sm'>
-                    <div class='px-4 py-3 border-b border-gray-100 bg-gray-50 rounded-t-lg'>
-                      <div class='flex items-center gap-2'>
-                        <FiTerminal class='text-gray-600 text-sm' />
-                        <h3 class='text-sm font-semibold text-gray-900'>
-                          Output
-                        </h3>
-                        {isRunning() && (
-                          <div class='ml-2 w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin'></div>
-                        )}
-                      </div>
-                    </div>
-                    <div class='p-4'>
-                      <pre class='w-full h-32 bg-transparent text-gray-800 font-mono text-sm leading-relaxed whitespace-pre-wrap overflow-auto'>
-                        {output()}
-                      </pre>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : null}
-        </main>
-
-        {/* AI Assistant - Right Panel */}
-        <aside class='w-80 bg-white border-l border-gray-200 flex flex-col'>
-          <div class='px-6 py-4 border-b border-gray-100 bg-blue-50'>
-            <div class='flex items-center gap-2'>
-              <FiMessageSquare class='text-blue-600' />
-              <h2 class='text-lg font-semibold text-gray-900'>AI Assistant</h2>
-            </div>
-          </div>
-
-          <div class='flex-1 p-4 space-y-4 overflow-y-auto bg-gray-50'>
-            <For each={messages()}>
-              {(message) => (
-                <div
-                  class={`p-4 rounded-lg ${
-                    message.sender === "AI Assistant"
-                      ? "bg-blue-100 border border-blue-200 ml-2"
-                      : "bg-white border border-gray-200 mr-2 shadow-sm"
-                  }`}>
-                  <div class='flex justify-between items-center mb-2'>
-                    <span
-                      class={`font-semibold text-sm ${
-                        message.sender === "AI Assistant"
-                          ? "text-blue-700"
-                          : "text-gray-900"
-                      }`}>
-                      {message.sender}
-                    </span>
-                    <span class='text-xs text-gray-500'>
-                      {message.timestamp}
-                    </span>
-                  </div>
-                  <p class='text-sm text-gray-800 leading-relaxed'>
-                    {message.content}
-                  </p>
-                </div>
-              )}
-            </For>
-          </div>
-
-          <div class='p-4 border-t border-gray-200 bg-white'>
-            <form onSubmit={sendAiMessage} class='flex gap-2'>
-              <input
-                type='text'
-                value={aiMessage()}
-                onInput={(e) => setAiMessage(e.target.value)}
-                placeholder='Ask AI for help...'
-                class='flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:bg-white transition-all text-sm'
-              />
-              <button
-                type='submit'
-                class='px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm'>
+          <Show when={error()}>
+            <div class='text-center max-w-md mx-auto p-8'>
+              <div class='w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4'>
                 <svg
-                  class='w-4 h-4'
+                  class='w-8 h-8 text-red-600'
                   fill='none'
                   stroke='currentColor'
                   viewBox='0 0 24 24'>
@@ -531,16 +432,419 @@ int main() {
                     stroke-linecap='round'
                     stroke-linejoin='round'
                     stroke-width='2'
-                    d='M12 19l9 2-9-18-9 18 9-2zm0 0v-8'
+                    d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.268 16.5c-.77.833.192 2.5 1.732 2.5z'
                   />
                 </svg>
-              </button>
-            </form>
-          </div>
-        </aside>
-      </div>
+              </div>
+              <h2 class='text-xl font-semibold text-gray-900 mb-2'>
+                Access Denied
+              </h2>
+              <p class='text-gray-600 mb-6'>{error()}</p>
+              <div class='space-y-2'>
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  class='w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors'>
+                  Back to Dashboard
+                </button>
+                <Show when={!userId()}>
+                  <button
+                    onClick={() => navigate("/login")}
+                    class='w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors'>
+                    Login
+                  </button>
+                </Show>
+              </div>
+            </div>
+          </Show>
+        </div>
+      }>
+      <div class='w-full min-w-[100vw] h-screen bg-gray-50 overflow-hidden flex flex-col'>
+        {/* Room Header */}
+        {room() && (
+          <div class='bg-white border-b border-gray-200 px-6 py-3'>
+            <div class='flex items-center justify-between'>
+              <div class='flex items-center gap-4'>
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  class='flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors'>
+                  <svg
+                    class='w-4 h-4'
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'>
+                    <path
+                      stroke-linecap='round'
+                      stroke-linejoin='round'
+                      stroke-width='2'
+                      d='M15 19l-7-7 7-7'
+                    />
+                  </svg>
+                  Back
+                </button>
+                <div class='h-6 w-px bg-gray-300'></div>
+                <div>
+                  <h1 class='text-lg font-semibold text-gray-900'>
+                    {room()?.Name}
+                  </h1>
+                  <p class='text-sm text-gray-600'>{room()?.Description}</p>
+                </div>
+              </div>
 
-      <style jsx>{`
+              <div class='flex items-center gap-4'>
+                {/* Room Info */}
+                <div class='flex items-center gap-2 text-sm text-gray-600'>
+                  <FiUsers class='w-4 h-4' />
+                  <span>{connectedUsers().length} members</span>
+                </div>
+
+                {/* Tags */}
+                <Show when={room()?.Tags?.length}>
+                  <div class='flex gap-1'>
+                    <For each={room()?.Tags?.slice(0, 3) || []}>
+                      {(tag: string) => (
+                        <span class='px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full'>
+                          {tag}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div class='flex flex-1 overflow-hidden'>
+          {/* Left Sidebar - Users and Files */}
+          <aside class='w-72 bg-white border-r border-gray-200 flex flex-col'>
+            {/* Connected Users */}
+            <div class='p-6 border-b border-gray-100'>
+              <div class='flex items-center gap-2 mb-4'>
+                <FiUsers class='text-gray-600' />
+                <h2 class='text-sm font-semibold text-gray-900'>
+                  Connected Users ({connectedUsers().length})
+                </h2>
+              </div>
+
+              <div class='space-y-3'>
+                <For each={connectedUsers()}>
+                  {(user) => (
+                    <div class='flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50'>
+                      <div
+                        class={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${
+                          user.online ? "" : "opacity-50"
+                        }`}
+                        style={{ "background-color": user.color }}>
+                        {user.name.charAt(0)}
+                      </div>
+                      <div class='flex-1'>
+                        <span class='text-sm font-medium text-gray-900'>
+                          {user.name}
+                        </span>
+                        <div class='flex items-center gap-2 mt-1'>
+                          <div
+                            class={`w-2 h-2 rounded-full ${
+                              user.online ? "bg-green-500" : "bg-gray-400"
+                            }`}></div>
+                          <span class='text-xs text-gray-500'>
+                            {user.online ? "Online" : "Offline"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+
+            {/* Files Section */}
+            <div class='flex-1 p-6'>
+              <div class='flex items-center justify-between mb-4'>
+                <div class='flex items-center gap-2'>
+                  <FiFile class='text-gray-600' />
+                  <h3 class='text-sm font-semibold text-gray-900'>
+                    Project Files
+                  </h3>
+                </div>
+                <button
+                  onClick={createNewFile}
+                  class='p-2 hover:bg-gray-100 rounded-lg transition-colors group'
+                  title='Create new file'>
+                  <FiPlus class='text-gray-600 text-sm group-hover:text-blue-600' />
+                </button>
+              </div>
+
+              {/* Show files if any exist */}
+              {files().length > 0 ? (
+                <div class='space-y-2'>
+                  <For each={files()}>
+                    {(file: file_objects, index) => (
+                      <div
+                        onClick={() => switchToFile(index())}
+                        class={`p-3 rounded-lg cursor-pointer transition-colors ${
+                          index() === activeFileIndex()
+                            ? "bg-blue-50 border border-blue-200"
+                            : "hover:bg-gray-50"
+                        }`}>
+                        <span
+                          class={`text-sm font-medium ${
+                            index() === activeFileIndex()
+                              ? "text-blue-700"
+                              : "text-gray-700"
+                          }`}>
+                          {file.name}
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              ) : (
+                /* Show empty state when no files */
+                <div class='flex flex-col items-center justify-center py-8 text-center'>
+                  <div class='w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4'>
+                    <FiFileText class='text-gray-400 text-2xl' />
+                  </div>
+                  <p class='text-sm text-gray-500 mb-3'>No files yet</p>
+                  <button
+                    onClick={createNewFile}
+                    class='flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm'>
+                    <FiPlus class='text-sm' />
+                    <span>Create File</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* Main Content Area */}
+          <main class='flex-1 flex flex-col overflow-hidden'>
+            {/* Code Editor Header */}
+            <div class='bg-white border-b border-gray-200 px-6 py-4'>
+              <div class='flex items-center justify-between'>
+                <div class='flex items-center gap-4'>
+                  <h2 class='text-lg font-semibold text-gray-900'>
+                    {files().length > 0 && files()[activeFileIndex()]
+                      ? files()[activeFileIndex()].name
+                      : "Code Editor"}
+                  </h2>
+                  <span class='text-sm text-gray-600'>
+                    Room: {room()?.Name || "#Room"}
+                  </span>
+                </div>
+
+                <div class='flex items-center gap-3'>
+                  <button
+                    class='flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium shadow-sm hover:shadow-md'
+                    onClick={() => setShowMemberChatModal(true)}>
+                    <FiUsers class='text-sm' />
+                    <span>Team Chat</span>
+                  </button>
+
+                  <button
+                    class='flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium shadow-sm hover:shadow-md'
+                    onClick={() => {
+                      console.log("Exiting room...");
+                      navigate("/dashboard");
+                    }}>
+                    <FiLogOut class='text-sm' />
+                    <span>Exit Room</span>
+                  </button>
+
+                  <button
+                    class={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-all ${
+                      isRunning()
+                        ? "bg-gray-400 text-white cursor-not-allowed"
+                        : "bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md"
+                    }`}
+                    onClick={runCode}
+                    disabled={isRunning()}>
+                    <FiPlay class='text-sm' />
+                    <span>{isRunning() ? "Running..." : "Run Code"}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Code Editor */}
+            <div class='flex-1 p-6'>
+              {files().length > 0 ? (
+                /* Show code editor when files exist */
+                <div class='h-full bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden'>
+                  <div class='h-full p-4'>
+                    <textarea
+                      class='w-full h-full bg-transparent resize-none outline-none text-gray-800 font-mono text-base leading-relaxed'
+                      value={code()}
+                      onInput={(e) => {
+                        setCode(e.target.value);
+                      }}
+                      placeholder='// Start coding here...'
+                      spellcheck={false}
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* Show create file prompt in center when no files */
+                <div class='h-full bg-white rounded-lg border border-gray-200 shadow-sm flex items-center justify-center'>
+                  <div class='text-center'>
+                    <div class='w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6'>
+                      <FiFileText class='text-gray-400 text-4xl' />
+                    </div>
+                    <h3 class='text-lg font-semibold text-gray-900 mb-2'>
+                      No files open
+                    </h3>
+                    <p class='text-gray-500 mb-6 max-w-sm'>
+                      Create your first file to start coding. You can create
+                      files for different programming languages.
+                    </p>
+                    <button
+                      onClick={createNewFile}
+                      class='flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto'>
+                      <FiPlus class='text-sm' />
+                      <span>Create Your First File</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            {showCreateFileModal() ? (
+              <CreateFileModal
+                isOpen={showCreateFileModal()}
+                onClose={() => setShowCreateFileModal(false)}
+                onCreateFile={handleCreateFile}
+                languages={languages}
+              />
+            ) : null}
+            {files().length > 0 ? (
+              <div class='bg-gray-50 border-t border-gray-200 p-6'>
+                <div class='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+                  {/* Input */}
+                  <div class='bg-white rounded-lg border border-gray-200 shadow-sm'>
+                    <div class='px-4 py-3 border-b border-gray-100 bg-gray-50 rounded-t-lg'>
+                      <div class='flex items-center gap-2'>
+                        <FiTerminal class='text-gray-600 text-sm' />
+                        <h3 class='text-sm font-semibold text-gray-900'>
+                          Input
+                        </h3>
+                      </div>
+                    </div>
+                    <div class='p-4'>
+                      <textarea
+                        class='w-full h-32 bg-transparent resize-none outline-none text-gray-800 font-mono text-sm leading-relaxed'
+                        value={input()}
+                        onInput={(e) => setInput(e.target.value)}
+                        placeholder='Enter input here...'
+                      />
+                    </div>
+                  </div>
+
+                  {/* Output */}
+                  {showOutput() && (
+                    <div class='bg-white rounded-lg border border-gray-200 shadow-sm'>
+                      <div class='px-4 py-3 border-b border-gray-100 bg-gray-50 rounded-t-lg'>
+                        <div class='flex items-center gap-2'>
+                          <FiTerminal class='text-gray-600 text-sm' />
+                          <h3 class='text-sm font-semibold text-gray-900'>
+                            Output
+                          </h3>
+                          {isRunning() && (
+                            <div class='ml-2 w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin'></div>
+                          )}
+                        </div>
+                      </div>
+                      <div class='p-4'>
+                        <pre class='w-full h-32 bg-transparent text-gray-800 font-mono text-sm leading-relaxed whitespace-pre-wrap overflow-auto'>
+                          {output()}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </main>
+
+          {/* AI Assistant - Right Panel */}
+          <aside class='w-80 bg-white border-l border-gray-200 flex flex-col'>
+            <div class='px-6 py-4 border-b border-gray-100 bg-blue-50'>
+              <div class='flex items-center gap-2'>
+                <FiMessageSquare class='text-blue-600' />
+                <h2 class='text-lg font-semibold text-gray-900'>
+                  AI Assistant
+                </h2>
+              </div>
+            </div>
+
+            <div class='flex-1 p-4 space-y-4 overflow-y-auto bg-gray-50'>
+              <For each={messages()}>
+                {(message) => (
+                  <div
+                    class={`p-4 rounded-lg ${
+                      message.sender === "AI Assistant"
+                        ? "bg-blue-100 border border-blue-200 ml-2"
+                        : "bg-white border border-gray-200 mr-2 shadow-sm"
+                    }`}>
+                    <div class='flex justify-between items-center mb-2'>
+                      <span
+                        class={`font-semibold text-sm ${
+                          message.sender === "AI Assistant"
+                            ? "text-blue-700"
+                            : "text-gray-900"
+                        }`}>
+                        {message.sender}
+                      </span>
+                      <span class='text-xs text-gray-500'>
+                        {message.timestamp}
+                      </span>
+                    </div>
+                    <p class='text-sm text-gray-800 leading-relaxed'>
+                      {message.content}
+                    </p>
+                  </div>
+                )}
+              </For>
+            </div>
+
+            <div class='p-4 border-t border-gray-200 bg-white'>
+              <form onSubmit={sendAiMessage} class='flex gap-2'>
+                <input
+                  type='text'
+                  value={aiMessage()}
+                  onInput={(e) => setAiMessage(e.target.value)}
+                  placeholder='Ask AI for help...'
+                  class='flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:bg-white transition-all text-sm'
+                />
+                <button
+                  type='submit'
+                  class='px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm'>
+                  <svg
+                    class='w-4 h-4'
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'>
+                    <path
+                      stroke-linecap='round'
+                      stroke-linejoin='round'
+                      stroke-width='2'
+                      d='M12 19l9 2-9-18-9 18 9-2zm0 0v-8'
+                    />
+                  </svg>
+                </button>
+              </form>
+            </div>
+          </aside>
+        </div>
+
+        {/* Team Chat Modal */}
+        <TeamChatModal
+          isOpen={showMemberChatModal()}
+          onClose={() => setShowMemberChatModal(false)}
+          connectedUsers={connectedUsers().map((user: any) => ({
+            name: user.name,
+            online: user.online,
+            color: user.color,
+          }))}
+        />
+
+        <style>{`
         @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
 
         * {
@@ -557,6 +861,7 @@ int main() {
           animation: spin 1s linear infinite;
         }
       `}</style>
-    </div>
+      </div>
+    </Show>
   );
 }

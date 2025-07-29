@@ -1,7 +1,7 @@
 import { createSignal, For } from "solid-js";
 import { FiX, FiFile, FiCheck, FiChevronDown } from "solid-icons/fi";
 
-export default function CreateFileModal(props) {
+export default function CreateFileModal(props: any) {
   const { isOpen, onClose, onCreateFile, languages } = props;
 
   const [name, setName] = createSignal("");

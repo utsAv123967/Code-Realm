@@ -1,41 +1,68 @@
 import { createSignal, Show } from "solid-js";
-import uuid from "uuid";
 import { createRoom } from "../../Backend/Database/Create_Room";
 import { Add_to_createdID } from "../../Backend/Database/Add_to_created_rooms";
 import { userId } from "../../context/Userdetails";
+import { ActivityTracker } from "../../utils/activityTracker";
 
 export const CreateRoomModal = (props: {
   isOpen: boolean;
   onClose: () => void;
+  onRoomCreated?: () => void; // New prop to handle refresh
 }) => {
   const [name, setName] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [tagsInput, setTagsInput] = createSignal("");
 
   const handleSubmit = async () => {
-    const tags = tagsInput()
-      .split(" ")
-      .map((t) => t.trim())
-      .filter((t) => t !== "");
+    const currentUserId = userId();
 
-    const id = await createRoom({
+    console.log("Creating room with user ID:", currentUserId);
+    console.log("User ID type:", typeof currentUserId);
+
+    // Validate user is logged in
+    if (!currentUserId) {
+      console.error("User must be logged in to create a room");
+      alert("Please log in to create a room");
+      return;
+    }
+
+    console.log("Room creation data:", {
       Name: name(),
-      Createdby: userId,
-      Description: description(),
-      Tags: tags,
+      Createdby: currentUserId,
     });
 
-    if (id == null) {
-      throw new Error("Room creation failed");
-      props.onClose();
-    } else {
-      console.log("Room created with ID:", id);
+    try {
+      const id = await createRoom({
+        Name: name(),
+        Createdby: currentUserId, // Use the validated user ID
+      });
 
-      await Add_to_createdID({ UserId: userId }, { roomId: id });
-      setName("");
-      setDescription("");
-      setTagsInput("");
-      props.onClose();
+      if (id == null) {
+        throw new Error("Room creation failed");
+      } else {
+        console.log("Room created successfully with ID:", id);
+        await Add_to_createdID({ UserId: currentUserId }, { roomId: id });
+
+        // Track the room creation activity
+        const roomTags = tagsInput()
+          .split(" ")
+          .map((t) => t.trim())
+          .filter((t) => t !== "");
+        ActivityTracker.trackRoomCreation(name(), roomTags);
+
+        // Call the refresh callback if provided
+        if (props.onRoomCreated) {
+          props.onRoomCreated();
+        }
+
+        setName("");
+        setDescription("");
+        setTagsInput("");
+        props.onClose();
+      }
+    } catch (error: any) {
+      console.error("Error creating room:", error);
+      alert("Failed to create room: " + (error?.message || error));
     }
   };
 

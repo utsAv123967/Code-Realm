@@ -1,6 +1,16 @@
 import express from "express";
 import cors from "cors";
 import { Buffer } from "buffer"; 
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from project root
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -9,6 +19,9 @@ app.use(express.json());
 
 const RAPID_API_HOST = process.env.RAPID_API_HOST;
 const RAPID_API_KEY = process.env.RAPID_API_KEY;
+
+console.log("API Host:", RAPID_API_HOST);
+console.log("API Key:", RAPID_API_KEY ? "Loaded" : "Not loaded");
 
 app.post("/api/compile", async (req, res) => {
   const { language_id, source_code } = req.body;
@@ -44,8 +57,8 @@ app.post("/api/compile", async (req, res) => {
     const outputResponse = await fetch(resultURL, {
       method: "GET",
       headers: {
-        "x-rapidapi-host": "judge0-ce.p.rapidapi.com",
-        "x-rapidapi-key": "9b27719d4cmsh5915198cc606d84p1c8390jsn5f177d1582dc",
+        "x-rapidapi-host": RAPID_API_HOST,
+        "x-rapidapi-key": RAPID_API_KEY,
       },
     });
 

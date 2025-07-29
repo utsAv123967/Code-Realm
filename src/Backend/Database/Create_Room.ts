@@ -1,21 +1,26 @@
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, serverTimestamp, setDoc, updateDoc, arrayUnion, addDoc, collection } from "firebase/firestore";
 import { db } from "./firebase";
-import uuid from "uuid"; // Import uuid to generate unique IDs
-
-export async function createRoom({ Name, Createdby, Description, Tags }) {
-  const roomId = uuid();
-  const docRef = await setDoc(doc(db, "Rooms", roomId), {
-    Roomid: roomId,
+export async function createRoom({ Name, Createdby }) {
+  console.log("create", { Name, Createdby });
+    
+  // Validate required fields
+  if (!Name || !Createdby) {
+    throw new Error("Name and Createdby are required");
+  }
+  
+  const docRef = await addDoc(collection(db, "Rooms"), {
     Name,
     Createdby,
-    Description,
-    Tags,
+    Description: "", // Add default description
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     files: [],
-    Users: [],
+    Users: [Createdby], // Creator is automatically added as first user
     Messages: [],
-    Applicants: {},
+    Applicants: [],
+    Tags: [], // Add default tags array
   });
-  return roomId;
+  
+  console.log("Room created with ID:", docRef.id, "Users:", [Createdby]);
+  return docRef.id;
 }
