@@ -7,7 +7,6 @@ import Home_new from "./Frontend/pages/Home_new";
 import Navbar from "./Frontend/components/General/Navbar";
 import Dashboard from "./Frontend/components/dashboard/Dashboard";
 import Test from "./Frontend/Test";
-import AuthDebugPanel from "./Frontend/components/General/AuthDebugPanel";
 import ProtectedRoute from "./Frontend/components/General/ProtectedRoute";
 import AuthRedirect from "./Frontend/components/General/AuthRedirect";
 import { auth } from "./Backend/Database/firebase";
@@ -62,7 +61,6 @@ function App() {
         />
         <Route path='/test' component={Test} />
       </Router>
-      <AuthDebugPanel />
     </>
   );
 }

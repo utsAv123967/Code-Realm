@@ -1,0 +1,54 @@
+// Firestore Security Rules for Chat Messages
+// Add these rules to your Firestore console under Rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read and write access to ChatMessages for authenticated users
+    match /ChatMessages/{messageId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow read and write access to Rooms for authenticated users  
+    match /Rooms/{roomId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow read and write access to Users for authenticated users
+    match /Users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+
+/* 
+FIRESTORE SETUP INSTRUCTIONS:
+
+1. SECURITY RULES:
+   - Go to Firebase Console > Firestore Database > Rules
+   - Replace the existing rules with the above rules
+   - Click "Publish"
+
+2. COMPOSITE INDEX (OPTIONAL - FOR BETTER PERFORMANCE):
+   For better chat performance with server-side sorting, create this composite index:
+   
+   - Go to Firebase Console > Firestore Database > Indexes
+   - Click "Create Index"
+   - Collection ID: ChatMessages
+   - Add these fields in order:
+     * roomId (Ascending)
+     * timestamp (Ascending)
+   - Query scope: Collection
+   - Click "Create"
+   
+   OR use this direct link (replace YOUR_PROJECT_ID):
+   https://console.firebase.google.com/project/YOUR_PROJECT_ID/firestore/indexes
+
+3. CURRENT IMPLEMENTATION:
+   The chat currently uses client-side sorting to avoid requiring the composite index.
+   This works fine for small to medium chat volumes. If you create the index above,
+   you can switch back to server-side sorting by uncommenting the orderBy in the query.
+
+Note: These are permissive rules for development. 
+In production, you should implement more restrictive rules based on your specific requirements.
+*/

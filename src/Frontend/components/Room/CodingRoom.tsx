@@ -9,6 +9,8 @@ import {
   FiFile,
   FiPlus,
   FiFileText,
+  FiSave,
+  FiTrash2,
 } from "solid-icons/fi";
 import { languages } from "../../../../languages.ts";
 import { userId } from "../../../context/Userdetails";
@@ -17,7 +19,13 @@ import { useRoomContext } from "../../context/RoomContext";
 // import setUser from "../../../Backend/Database/SetUser.ts";
 import CreateFileModal from "../../modals/createFile.tsx";
 import { TeamChatModal } from "../../modals/teamChatModal.tsx";
-import type { file_objects, Room } from "../../../types.ts";
+import {
+  createFile,
+  updateFileContent,
+  loadFilesByIds,
+  deleteFile,
+} from "../../../Backend/Database/FileManager";
+import type { file_objects, Room, DatabaseFile } from "../../../types.ts";
 
 export default function CodingRoom() {
   const params = useParams();
@@ -59,19 +67,16 @@ export default function CodingRoom() {
     }
 
     try {
-      console.log("🔍 Looking for room in context:", params.roomId);
-
       // First check if room is already set as current room in context
       let roomData = roomContext.currentRoom();
       if (roomData && roomData.RoomId === params.roomId) {
-        console.log("✅ Room found in context as current room");
+        // Room found in context as current room
       } else {
         // Check if room is in cached rooms
         roomData = roomContext.getRoomById(params.roomId);
 
         // If not in cache, try to refresh context
         if (!roomData) {
-          console.log("🔄 Room not in cache, refreshing context...");
           await roomContext.refreshRooms();
           roomData = roomContext.getRoomById(params.roomId);
         }
@@ -92,7 +97,6 @@ export default function CodingRoom() {
       if (!accessGranted) {
         setError("You don't have permission to access this room");
       } else {
-        console.log("✅ Room loaded successfully:", roomData.Name);
         // Set as current room in context for future reference
         roomContext.setCurrentRoom(roomData);
 
@@ -129,13 +133,19 @@ export default function CodingRoom() {
 
         // Initialize files from room data if available
         if (roomData.files && roomData.files.length > 0) {
-          // Note: Room.files is string[] but we need file_objects[]
-          // For now, create default file objects based on file names
-          const roomFiles = roomData.files.map((fileName: string) => ({
-            name: fileName,
-            body: "// File content will be loaded here...",
-            language: getLanguageFromFileName(fileName),
+          // Load actual file data from database using file IDs
+          const databaseFiles = await loadFilesByIds(roomData.files);
+
+          // Convert database files to local file format
+          const roomFiles = databaseFiles.map((dbFile: DatabaseFile) => ({
+            name: dbFile.name,
+            body: dbFile.code,
+            language: dbFile.language,
+            fileId: dbFile.fileId,
+            lastChanged: dbFile.lastChanged,
+            roomId: dbFile.roomId,
           }));
+
           setFiles(roomFiles);
           if (roomFiles.length > 0) {
             setActiveFileIndex(0);
@@ -144,7 +154,6 @@ export default function CodingRoom() {
         }
       }
     } catch (err) {
-      console.error("❌ Error loading room data:", err);
       setError("Failed to load room data");
     } finally {
       setLoading(false);
@@ -152,9 +161,25 @@ export default function CodingRoom() {
   };
 
   onMount(() => {
-    console.log("🎯 CodingRoom mounted with params:", params);
-    console.log("🔑 Room ID from URL:", params.roomId);
     loadRoomData();
+
+    // Add keyboard shortcut for saving (Ctrl+S)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "s") {
+        e.preventDefault(); // Prevent browser's default save
+        handleManualSave();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    // Cleanup event listener on unmount
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+      }
+    };
   });
   // const RoomID =
   const [code, setCode] = createSignal("//write Code");
@@ -164,11 +189,109 @@ export default function CodingRoom() {
 
   const [showOutput, setShowOutput] = createSignal(false);
   const [isRunning, setIsRunning] = createSignal(false);
+  const [isSaving, setIsSaving] = createSignal(false);
 
   const [files, setFiles] = createSignal<file_objects[]>([]);
   const [activeFileIndex, setActiveFileIndex] = createSignal(0);
   const [showCreateFileModal, setShowCreateFileModal] = createSignal(false);
   const [showMemberChatModal, setShowMemberChatModal] = createSignal(false);
+
+  // Auto-save timer for file content
+  let saveTimer: NodeJS.Timeout | null = null;
+
+  // Function to save file content to database
+  const saveFileContent = async (fileId: string, content: string) => {
+    try {
+      const result = await updateFileContent(fileId, content);
+      if (result.success) {
+        // Update local file's lastChanged timestamp and clear unsaved changes
+        const updatedFiles = files().map((file, index) => {
+          if (index === activeFileIndex() && file.fileId === fileId) {
+            return {
+              ...file,
+              lastChanged: new Date(),
+              hasUnsavedChanges: false,
+            };
+          }
+          return file;
+        });
+        setFiles(updatedFiles);
+      }
+    } catch (error) {
+      // Auto-save failed silently
+    }
+  };
+
+  // Manual save function for the save button
+  const handleManualSave = async () => {
+    const activeFile = files()[activeFileIndex()];
+    if (!activeFile || !activeFile.fileId) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Clear any pending auto-save
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+
+      const result = await updateFileContent(activeFile.fileId, code());
+      if (result.success) {
+        // Update local file's lastChanged timestamp and clear unsaved changes
+        const updatedFiles = files().map((file, index) => {
+          if (
+            index === activeFileIndex() &&
+            file.fileId === activeFile.fileId
+          ) {
+            return {
+              ...file,
+              lastChanged: new Date(),
+              hasUnsavedChanges: false,
+            };
+          }
+          return file;
+        });
+        setFiles(updatedFiles);
+      }
+    } catch (error) {
+      // Handle error silently or show user notification
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Enhanced setCode function with auto-save
+  const updateCode = (newCode: string) => {
+    setCode(newCode);
+
+    // Update local file content
+    const activeFile = files()[activeFileIndex()];
+    if (activeFile) {
+      const updatedFiles = files().map((file, index) => {
+        if (index === activeFileIndex()) {
+          return {
+            ...file,
+            body: newCode,
+            hasUnsavedChanges: true, // Mark as having unsaved changes
+          };
+        }
+        return file;
+      });
+      setFiles(updatedFiles);
+
+      // Auto-save to database after 2 seconds of inactivity
+      if (activeFile.fileId) {
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+        }
+        saveTimer = setTimeout(() => {
+          saveFileContent(activeFile.fileId!, newCode);
+        }, 2000);
+      }
+    }
+  };
 
   // Initialize messages from room data - use default value
   const [messages, setMessages] = createSignal([
@@ -228,51 +351,63 @@ export default function CodingRoom() {
 
   // Empty function for creating new file - you can implement this
   const createNewFile = () => {
-    console.log("Create new file clicked");
     setShowCreateFileModal(true);
   };
 
   // Add this function before the return statement in CodingRoom.tsx
-  const handleCreateFile = (fileName: string, language: string) => {
+  const handleCreateFile = async (fileName: string, language: string) => {
     const newFile = {
       name: fileName,
       body: getDefaultContent(language),
       language: language,
     };
-    // AddFile(newFile);
+
+    // Add file to local state first for immediate UI update
     setFiles([...files(), newFile]);
     setActiveFileIndex(files().length - 1); // Switch to the new file
     setCode(newFile.body);
-    console.log("File created:", newFile);
-  };
 
-  // Helper function to get language from filename
-  const getLanguageFromFileName = (fileName: string): string => {
-    const extension = fileName.split(".").pop()?.toLowerCase();
-    switch (extension) {
-      case "js":
-        return "JavaScript";
-      case "ts":
-        return "TypeScript";
-      case "py":
-        return "Python";
-      case "cpp":
-      case "cc":
-        return "C++";
-      case "c":
-        return "C";
-      case "java":
-        return "Java";
-      case "go":
-        return "Go";
-      case "rs":
-        return "Rust";
-      case "php":
-        return "PHP";
-      case "rb":
-        return "Ruby";
-      default:
-        return "JavaScript"; // Default fallback
+    // Save file to database using new file management system
+    const currentRoom = room();
+    const currentUserId = userId();
+
+    if (currentRoom && params.roomId && currentUserId) {
+      try {
+        const result = await createFile(
+          params.roomId,
+          fileName,
+          newFile.body,
+          language,
+          currentUserId
+        );
+
+        if (result.success && result.file) {
+          // Update the local file with database info
+          const updatedFiles = [...files()];
+          const lastIndex = updatedFiles.length - 1;
+          updatedFiles[lastIndex] = {
+            ...updatedFiles[lastIndex],
+            fileId: result.file.fileId,
+            lastChanged: result.file.lastChanged,
+            roomId: result.file.roomId,
+          };
+          setFiles(updatedFiles);
+
+          // Update the room context with the new file ID
+          const updatedRoom = {
+            ...currentRoom,
+            files: [...(currentRoom.files || []), result.file.fileId],
+            updatedAt: new Date(),
+          };
+          setRoom(updatedRoom);
+          roomContext.setCurrentRoom(updatedRoom);
+
+          // Refresh room data to sync with database
+          await roomContext.refreshRooms();
+        }
+      } catch (error) {
+        // Handle error silently
+      }
     }
   };
 
@@ -313,7 +448,64 @@ int main() {
     if (file) {
       setCode(file.body);
     }
-    console.log("Switch to file index:", index);
+  };
+
+  // Delete file function
+  const handleDeleteFile = async (fileIndex: number) => {
+    const fileToDelete = files()[fileIndex];
+
+    if (!fileToDelete || !fileToDelete.fileId || !room()?.RoomId) {
+      return;
+    }
+
+    // Confirm deletion
+    const confirmed = confirm(
+      `Are you sure you want to delete "${fileToDelete.name}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      // Delete from database
+      const result = await deleteFile(fileToDelete.fileId, room()!.RoomId);
+
+      if (result.success) {
+        // Remove from local state
+        const updatedFiles = files().filter((_, index) => index !== fileIndex);
+        setFiles(updatedFiles);
+
+        // Update active file index if needed
+        if (activeFileIndex() >= updatedFiles.length) {
+          if (updatedFiles.length > 0) {
+            setActiveFileIndex(updatedFiles.length - 1);
+            setCode(updatedFiles[updatedFiles.length - 1].body);
+          } else {
+            setActiveFileIndex(-1);
+            setCode("//write Code");
+          }
+        } else if (activeFileIndex() === fileIndex) {
+          // If we deleted the active file, switch to the next one or clear
+          if (updatedFiles.length > 0) {
+            const newIndex =
+              fileIndex >= updatedFiles.length
+                ? updatedFiles.length - 1
+                : fileIndex;
+            setActiveFileIndex(newIndex);
+            setCode(updatedFiles[newIndex].body);
+          } else {
+            setActiveFileIndex(-1);
+            setCode("//write Code");
+          }
+        } else if (activeFileIndex() > fileIndex) {
+          // Adjust active index if we deleted a file before the active one
+          setActiveFileIndex(activeFileIndex() - 1);
+        }
+
+        // Refresh room context
+        await roomContext.refreshRooms();
+      }
+    } catch (error) {
+      // Handle error silently
+    }
   };
 
   const runCode = async () => {
@@ -328,9 +520,6 @@ int main() {
       setIsRunning(false);
       return;
     }
-
-    console.log(code());
-    console.log(activeFile.language);
 
     const languageMatch = languages.find(
       (lang) => lang.name === activeFile.language
@@ -360,7 +549,6 @@ int main() {
         setOutput(result.stdout);
       }
     } catch (error: any) {
-      console.log("Error running code:", error);
       setOutput(`Error: ${error.message}`);
     } finally {
       setIsRunning(false);
@@ -397,12 +585,6 @@ int main() {
       };
       setMessages([...messages(), aiResponse]);
     }, 1000);
-  };
-
-  const autoResize = (e: Event) => {
-    const target = e.target as HTMLTextAreaElement;
-    target.style.height = "auto";
-    target.style.height = target.scrollHeight + "px";
   };
 
   return (
@@ -580,20 +762,57 @@ int main() {
                   <For each={files()}>
                     {(file: file_objects, index) => (
                       <div
-                        onClick={() => switchToFile(index())}
-                        class={`p-3 rounded-lg cursor-pointer transition-colors ${
+                        class={`flex items-center justify-between p-3 rounded-lg transition-colors group ${
                           index() === activeFileIndex()
                             ? "bg-blue-50 border border-blue-200"
-                            : "hover:bg-gray-50"
+                            : "hover:bg-gray-50 border border-transparent"
                         }`}>
-                        <span
-                          class={`text-sm font-medium ${
-                            index() === activeFileIndex()
-                              ? "text-blue-700"
-                              : "text-gray-700"
-                          }`}>
-                          {file.name}
-                        </span>
+                        {/* File info section */}
+                        <div
+                          class='flex-1 cursor-pointer'
+                          onClick={() => switchToFile(index())}>
+                          <div class='flex flex-col gap-1'>
+                            <div class='flex items-center gap-2'>
+                              <span
+                                class={`text-sm font-medium ${
+                                  index() === activeFileIndex()
+                                    ? "text-blue-700"
+                                    : "text-gray-700"
+                                }`}>
+                                {file.name}
+                              </span>
+                              {file.hasUnsavedChanges && (
+                                <div
+                                  class='w-2 h-2 bg-orange-500 rounded-full'
+                                  title='Unsaved changes'></div>
+                              )}
+                            </div>
+                            {file.lastChanged && (
+                              <span class='text-xs text-gray-500'>
+                                Last changed:{" "}
+                                {file.lastChanged.toLocaleDateString()}{" "}
+                                {file.lastChanged.toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            )}
+                            <span class='text-xs text-gray-400'>
+                              {file.language}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Delete button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent file selection when clicking delete
+                            handleDeleteFile(index());
+                          }}
+                          class='opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-all duration-200'
+                          title='Delete file'>
+                          <FiTrash2 class='text-red-500 text-xs' />
+                        </button>
                       </div>
                     )}
                   </For>
@@ -622,11 +841,20 @@ int main() {
             <div class='bg-white border-b border-gray-200 px-6 py-4'>
               <div class='flex items-center justify-between'>
                 <div class='flex items-center gap-4'>
-                  <h2 class='text-lg font-semibold text-gray-900'>
-                    {files().length > 0 && files()[activeFileIndex()]
-                      ? files()[activeFileIndex()].name
-                      : "Code Editor"}
-                  </h2>
+                  <div class='flex items-center gap-2'>
+                    <h2 class='text-lg font-semibold text-gray-900'>
+                      {files().length > 0 && files()[activeFileIndex()]
+                        ? files()[activeFileIndex()].name
+                        : "Code Editor"}
+                    </h2>
+                    {files().length > 0 &&
+                      files()[activeFileIndex()]?.hasUnsavedChanges && (
+                        <div class='flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs'>
+                          <div class='w-1.5 h-1.5 bg-orange-500 rounded-full'></div>
+                          <span>Unsaved</span>
+                        </div>
+                      )}
+                  </div>
                   <span class='text-sm text-gray-600'>
                     Room: {room()?.Name || "#Room"}
                   </span>
@@ -643,12 +871,27 @@ int main() {
                   <button
                     class='flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium shadow-sm hover:shadow-md'
                     onClick={() => {
-                      console.log("Exiting room...");
                       navigate("/dashboard");
                     }}>
                     <FiLogOut class='text-sm' />
                     <span>Exit Room</span>
                   </button>
+
+                  {/* Save Button */}
+                  {files().length > 0 && files()[activeFileIndex()]?.fileId && (
+                    <button
+                      class={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all text-sm shadow-sm hover:shadow-md ${
+                        isSaving()
+                          ? "bg-gray-400 text-white cursor-not-allowed"
+                          : "bg-blue-600 text-white hover:bg-blue-700"
+                      }`}
+                      onClick={handleManualSave}
+                      disabled={isSaving()}
+                      title='Save current file'>
+                      <FiSave class='text-sm' />
+                      <span>{isSaving() ? "Saving..." : "Save"}</span>
+                    </button>
+                  )}
 
                   <button
                     class={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-all ${
@@ -674,7 +917,7 @@ int main() {
                       class='w-full h-full bg-transparent resize-none outline-none text-gray-800 font-mono text-base leading-relaxed'
                       value={code()}
                       onInput={(e) => {
-                        setCode(e.target.value);
+                        updateCode(e.target.value);
                       }}
                       placeholder='// Start coding here...'
                       spellcheck={false}
@@ -837,6 +1080,7 @@ int main() {
         <TeamChatModal
           isOpen={showMemberChatModal()}
           onClose={() => setShowMemberChatModal(false)}
+          roomId={params.roomId || ""}
           connectedUsers={connectedUsers().map((user: any) => ({
             name: user.name,
             online: user.online,

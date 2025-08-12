@@ -18,11 +18,14 @@ interface RoomContextType {
   currentRoom: () => Room | undefined;
   loading: () => boolean;
   error: () => string | undefined;
+  availableRooms: () => Room[];
+  availableRoomsLoading: () => boolean;
 
   // Actions
   setCurrentRoom: (room: Room | undefined) => void;
   refreshRooms: () => Promise<void>;
   getRoomById: (roomId: string) => Room | undefined;
+  fetchAvailableRooms: () => Promise<void>;
 }
 
 const RoomContext = createContext<RoomContextType>();
@@ -46,12 +49,13 @@ export const RoomProvider = (props: RoomProviderProps) => {
   );
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | undefined>(undefined);
+  const [availableRooms, setAvailableRooms] = createSignal<Room[]>([]);
+  const [availableRoomsLoading, setAvailableRoomsLoading] = createSignal(false);
 
   // Fetch all rooms where user is creator or member
   const fetchUserRooms = async () => {
     const currentUserId = userId();
     if (!currentUserId) {
-      console.log("🚫 No user ID, skipping room fetch");
       return;
     }
 
@@ -59,8 +63,6 @@ export const RoomProvider = (props: RoomProviderProps) => {
     setError(undefined);
 
     try {
-      console.log("🔄 Fetching rooms for user:", currentUserId);
-
       // Query 1: Rooms created by user
       const createdRoomsQuery = query(
         collection(db, "Rooms"),
@@ -130,9 +132,7 @@ export const RoomProvider = (props: RoomProviderProps) => {
       rooms.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
       setUserRooms(rooms);
-      console.log("✅ Fetched rooms:", rooms.length, rooms);
     } catch (err) {
-      console.error("❌ Error fetching rooms:", err);
       setError("Failed to load rooms");
     } finally {
       setLoading(false);
@@ -147,7 +147,6 @@ export const RoomProvider = (props: RoomProviderProps) => {
   // Fetch a specific room from Firebase if not in cache
   const fetchRoomById = async (roomId: string): Promise<Room | undefined> => {
     try {
-      console.log("🔄 Fetching specific room:", roomId);
       const roomDoc = await getDoc(doc(db, "Rooms", roomId));
 
       if (!roomDoc.exists()) {
@@ -173,7 +172,6 @@ export const RoomProvider = (props: RoomProviderProps) => {
 
       return room;
     } catch (err) {
-      console.error("❌ Error fetching room by ID:", err);
       return undefined;
     }
   };
@@ -190,9 +188,7 @@ export const RoomProvider = (props: RoomProviderProps) => {
 
     if (room) {
       setCurrentRoom(room);
-      console.log("🎯 Set current room:", room.Name, room.RoomId);
     } else {
-      console.log("❌ Room not found:", roomId);
       setError(`Room with ID ${roomId} not found`);
     }
   };
@@ -202,11 +198,103 @@ export const RoomProvider = (props: RoomProviderProps) => {
     await fetchUserRooms();
   };
 
+  // Fetch all available rooms (rooms the user hasn't joined yet)
+  const fetchAvailableRooms = async () => {
+    const currentUserId = userId();
+    if (!currentUserId) {
+      return;
+    }
+
+    setAvailableRoomsLoading(true);
+    setError(undefined);
+
+    try {
+      // Fetch all rooms from the database
+      const allRoomsQuery = collection(db, "Rooms");
+      const allRoomsSnapshot = await getDocs(allRoomsQuery);
+
+      if (allRoomsSnapshot.docs.length === 0) {
+        setAvailableRooms([]);
+        return;
+      }
+
+      const allRooms: Room[] = [];
+      allRoomsSnapshot.docs.forEach((doc) => {
+        try {
+          const data = doc.data();
+          const room: Room = {
+            Applicants: data.Applicants || [],
+            Createdby: data.Createdby,
+            Description: data.Description || "",
+            Messages: data.Messages || [],
+            Name: data.Name,
+            RoomId: doc.id,
+            Tags: data.Tags || [],
+            Users: data.Users || [],
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+            files: data.files || [],
+            isActive: true,
+            type: "All",
+          };
+          allRooms.push(room);
+        } catch (roomError) {
+          console.error(`❌ Error processing room ${doc.id}:`, roomError);
+        }
+      });
+
+      // Filter out rooms the user has already joined or created
+      const roomsToJoin = allRooms.filter((room) => {
+        // Exclude rooms created by the user
+        if (room.Createdby === currentUserId) {
+          return false;
+        }
+
+        // Exclude rooms where user is already a member
+        if (room.Users && room.Users.includes(currentUserId)) {
+          return false;
+        }
+
+        // Exclude rooms where user has already applied (if Applicants contains user objects)
+        if (room.Applicants && room.Applicants.length > 0) {
+          const hasApplied = room.Applicants.some((applicant: any) =>
+            typeof applicant === "string"
+              ? applicant === currentUserId
+              : applicant.userId === currentUserId
+          );
+          if (hasApplied) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+      // Sort by most recent first
+      roomsToJoin.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+
+      setAvailableRooms(roomsToJoin);
+    } catch (err) {
+      console.error("❌ Error fetching available rooms:", err);
+      setError("Failed to load available rooms: " + (err as Error).message);
+    } finally {
+      setAvailableRoomsLoading(false);
+    }
+  };
+
   // Load rooms on mount and when user changes
   onMount(() => {
-    if (userId()) {
-      fetchUserRooms();
-    }
+    const checkAndLoadRooms = () => {
+      const currentUserId = userId();
+      if (currentUserId) {
+        fetchUserRooms();
+        fetchAvailableRooms();
+      } else {
+        // Retry after a short delay
+        setTimeout(checkAndLoadRooms, 500);
+      }
+    };
+    checkAndLoadRooms();
   });
 
   // Watch for user changes and reload rooms
@@ -225,9 +313,12 @@ export const RoomProvider = (props: RoomProviderProps) => {
     currentRoom,
     loading,
     error,
+    availableRooms,
+    availableRoomsLoading,
     setCurrentRoom,
     refreshRooms,
     getRoomById,
+    fetchAvailableRooms,
   };
 
   // Add setCurrentRoomById to context for external use

@@ -2,6 +2,21 @@ export interface file_objects {
   name: string;
   body: string;
   language: string;
+  fileId?: string; // Optional for local files
+  lastChanged?: Date;
+  roomId?: string;
+  hasUnsavedChanges?: boolean; // Track unsaved changes
+}
+
+// New interface for database file storage
+export interface DatabaseFile {
+  fileId: string;
+  name: string;
+  code: string;
+  lastChanged: Date;
+  roomId: string;
+  language: string;
+  createdBy: string;
 }
 
 export type RoomType = "All" | "Protected";
@@ -16,7 +31,7 @@ export interface Room {
   Users?: string[];   
   createdAt:Date,
   updatedAt:Date,                 // Users (optional)
-  files?: string[];      
+  files?: string[];      // Array of file IDs instead of filenames
   isActive:boolean;
   type: RoomType;
 }

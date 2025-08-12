@@ -1,5 +1,5 @@
 // Dashboard.tsx
-import { createSignal, createMemo, For, Show } from "solid-js";
+import { createSignal, createMemo, For, Show, createEffect } from "solid-js";
 import { StatCard } from "./StatCard";
 import { RoomCard } from "./RoomCard";
 import { ActivityCard } from "./ActivityCard";
@@ -58,14 +58,17 @@ const Dashboard = () => {
       console.log("✅ Successfully joined room!");
 
       // Track the activity
-      const room = roomContext.userRooms().find((r) => r.RoomId === roomId);
+      const room =
+        roomContext.userRooms().find((r) => r.RoomId === roomId) ||
+        roomContext.availableRooms().find((r) => r.RoomId === roomId);
       if (room) {
         ActivityTracker.trackRoomJoin(room.Name);
         loadActivities(); // Refresh activities
       }
 
-      // Refresh the room data to update the UI
+      // Refresh both user rooms and available rooms
       await roomContext.refreshRooms();
+      await roomContext.fetchAvailableRooms();
     } catch (error) {
       console.error("❌ Failed to join room:", error);
     }
@@ -93,11 +96,20 @@ const Dashboard = () => {
       );
   });
 
-  const availableRooms = createMemo(() => {
-    const currentUserId = userId();
-    if (!currentUserId) return [];
-    // For now, we'll show all user rooms as available
-    return roomContext.userRooms();
+  // Remove the old availableRooms memo since we now get it from context
+  // const availableRooms = createMemo(() => {
+  //   const currentUserId = userId();
+  //   if (!currentUserId) return [];
+  //   // For now, we'll show all user rooms as available
+  //   return roomContext.userRooms();
+  // });
+
+  // Watch for tab changes and fetch available rooms when "Join Room" is selected
+  createEffect(() => {
+    if (activeTab() === "Join Room") {
+      console.log("🔄 Join Room tab selected, fetching available rooms...");
+      roomContext.fetchAvailableRooms();
+    }
   });
 
   const [recentActivity, setRecentActivity] = createSignal<ActivityItem[]>([]);
@@ -114,11 +126,17 @@ const Dashboard = () => {
   };
 
   const totalRooms = createMemo(
-    () => joinedRooms().length + createdRooms().length + availableRooms().length
+    () =>
+      joinedRooms().length +
+      createdRooms().length +
+      roomContext.availableRooms().length
   );
 
   const activeRooms = createMemo(
-    () => joinedRooms().length + createdRooms().length + availableRooms().length // All rooms are considered active since Room type doesn't have isActive
+    () =>
+      joinedRooms().length +
+      createdRooms().length +
+      roomContext.availableRooms().length // All rooms are considered active since Room type doesn't have isActive
   );
 
   const totalMembers = createMemo(
@@ -141,13 +159,6 @@ const Dashboard = () => {
       return matchesSearch;
     });
   });
-
-  const handleCreateRoom = (roomName: string, tags?: string[]) => {
-    // Track room creation activity
-    ActivityTracker.trackRoomCreation(roomName, tags);
-    loadActivities(); // Refresh activities
-    roomContext.refreshRooms(); // Refresh room data
-  };
 
   // Load activities on component mount
   setTimeout(() => loadActivities(), 100);
@@ -348,10 +359,11 @@ const Dashboard = () => {
           <CreateRoomModal
             isOpen={createRoomModalOpen()}
             onClose={() => setCreateRoomModalOpen(false)}
-            onRoomCreated={() => {
+            onRoomCreated={async () => {
               console.log("Room created, refreshing dashboard data...");
               loadActivities(); // Refresh activities
-              roomContext.refreshRooms();
+              await roomContext.refreshRooms();
+              await roomContext.fetchAvailableRooms();
             }}
           />
         </Show>
@@ -446,11 +458,55 @@ const Dashboard = () => {
                 Join public rooms and start collaborating with developers
                 worldwide
               </p>
+              {/* Temporary debug button */}
+              <button
+                onClick={() => {
+                  console.log("🔄 Manual refresh triggered");
+                  roomContext.fetchAvailableRooms();
+                }}
+                class='mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600'>
+                🔄 Debug: Refresh Available Rooms
+              </button>
+              <div class='mt-2 text-sm text-gray-500'>
+                Debug: Available rooms count:{" "}
+                {roomContext.availableRooms().length} | Loading:{" "}
+                {roomContext.availableRoomsLoading() ? "Yes" : "No"} | User
+                rooms: {roomContext.userRooms().length} | Current User ID:{" "}
+                {userId()?.slice(0, 8) || "None"}...
+                {roomContext.error() && (
+                  <div class='mt-2 text-red-600'>
+                    Error: {roomContext.error()}
+                  </div>
+                )}
+              </div>
+              {/* Show available rooms for debugging */}
+              <div class='mt-4 p-4 bg-gray-100 rounded text-left text-sm'>
+                <h4 class='font-semibold mb-2'>Debug: Available Rooms List</h4>
+                <Show
+                  when={roomContext.availableRooms().length > 0}
+                  fallback={<p>No available rooms</p>}>
+                  <For each={roomContext.availableRooms()}>
+                    {(room) => (
+                      <div class='mb-2 p-2 bg-white rounded'>
+                        <strong>{room.Name}</strong> (ID:{" "}
+                        {room.RoomId.slice(0, 8)}...)
+                        <br />
+                        Created by: {room.Createdby.slice(0, 8)}...
+                        <br />
+                        Users: {room.Users?.length || 0} members
+                      </div>
+                    )}
+                  </For>
+                </Show>
+              </div>
             </div>
           </div>
 
           <Show
-            when={!roomContext.loading() && roomContext.userRooms().length >= 0}
+            when={
+              !roomContext.availableRoomsLoading() &&
+              roomContext.availableRooms().length >= 0
+            }
             fallback={
               <div class='flex items-center justify-center py-16'>
                 <div class='text-center'>
@@ -464,7 +520,7 @@ const Dashboard = () => {
               </div>
             }>
             <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-              <For each={availableRooms()}>
+              <For each={roomContext.availableRooms()}>
                 {(room) => (
                   <RoomApplicationCard room={room} onApply={handleJoinRoom} />
                 )}
@@ -472,7 +528,7 @@ const Dashboard = () => {
             </div>
 
             {/* Empty state for join rooms */}
-            <Show when={availableRooms().length === 0}>
+            <Show when={roomContext.availableRooms().length === 0}>
               <div class='text-center py-16'>
                 <div class='w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4'>
                   <Users size={32} class='text-green-600' />
