@@ -18,8 +18,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: "18"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm install
@@ -33,7 +33,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID || '123456789' }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID || '1:123456789:web:dummy' }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID || 'G-DUMMY' }}
-          VITE_COMPILER_API_BASE: 'http://localhost:5000'
+          VITE_COMPILER_API_BASE: "http://localhost:5000"
         run: npm run build
 
       - name: Test Docker Build
@@ -49,7 +49,7 @@ jobs:
             --build-arg VITE_FIREBASE_MEASUREMENT_ID=G-DUMMY \
             --build-arg VITE_COMPILER_API_BASE=http://localhost:5000 \
             .
-          
+
           # Test if backend Dockerfile builds successfully  
           docker build -f Dockerfile.backend -t coderealm-backend-test \
             --build-arg NODE_ENV=production \
