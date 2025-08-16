@@ -5,12 +5,14 @@ A collaborative coding platform built with SolidJS, TypeScript, and Firebase.
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js 18+
 - Docker Desktop
 
 ### Development Setup
 
 1. **Clone and Install**
+
    ```bash
    git clone https://github.com/utsAv123967/Code-Realm.git
    cd Code-Realm
@@ -18,10 +20,11 @@ A collaborative coding platform built with SolidJS, TypeScript, and Firebase.
    ```
 
 2. **Environment Setup**
+
    ```bash
    # Copy environment template
    cp .env.example .env
-   
+
    # Add your Firebase and RapidAPI credentials to .env
    ```
 
@@ -33,6 +36,7 @@ A collaborative coding platform built with SolidJS, TypeScript, and Firebase.
 ### Docker Deployment
 
 1. **Build and Run**
+
    ```bash
    docker-compose up --build
    ```
@@ -69,7 +73,7 @@ A collaborative coding platform built with SolidJS, TypeScript, and Firebase.
 
 ## 🌐 Environment Variables
 
-Required environment variables are documented in `.env.example`. 
+Required environment variables are documented in `.env.example`.
 
 **Important**: Never commit actual `.env` files to the repository!
 

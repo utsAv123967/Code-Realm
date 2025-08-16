@@ -1,43 +1,66 @@
-# GitHub Actions CI/CD with Secrets
-name: Build and Deploy
+# GitHub Actions CI/CD for Code Realm
+name: Build and Test
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Build Frontend with Secrets
-        run: |
-          docker build \
-            --build-arg VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY }} \
-            --build-arg VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }} \
-            --build-arg VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID }} \
-            --build-arg VITE_FIREBASE_STORAGE_BUCKET=${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }} \
-            --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }} \
-            --build-arg VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }} \
-            --build-arg VITE_FIREBASE_MEASUREMENT_ID=${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }} \
-            --build-arg VITE_COMPILER_API_BASE=https://your-backend.com \
-            -t frontend .
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
 
-      - name: Build Backend with Secrets
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Frontend
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || 'dummy-key-for-build' }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || 'dummy.firebaseapp.com' }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID || 'dummy-project' }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET || 'dummy.appspot.com' }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID || '123456789' }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID || '1:123456789:web:dummy' }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID || 'G-DUMMY' }}
+          VITE_COMPILER_API_BASE: 'http://localhost:5000'
+        run: npm run build
+
+      - name: Test Docker Build
         run: |
-          docker build \
+          # Test if Dockerfile builds successfully
+          docker build -t coderealm-frontend-test \
+            --build-arg VITE_FIREBASE_API_KEY=dummy-key \
+            --build-arg VITE_FIREBASE_AUTH_DOMAIN=dummy.firebaseapp.com \
+            --build-arg VITE_FIREBASE_PROJECT_ID=dummy-project \
+            --build-arg VITE_FIREBASE_STORAGE_BUCKET=dummy.appspot.com \
+            --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID=123456789 \
+            --build-arg VITE_FIREBASE_APP_ID=1:123456789:web:dummy \
+            --build-arg VITE_FIREBASE_MEASUREMENT_ID=G-DUMMY \
+            --build-arg VITE_COMPILER_API_BASE=http://localhost:5000 \
+            .
+          
+          # Test if backend Dockerfile builds successfully  
+          docker build -f Dockerfile.backend -t coderealm-backend-test \
             --build-arg NODE_ENV=production \
             --build-arg PORT=5000 \
-            --build-arg RAPID_API_HOST=${{ secrets.RAPID_API_HOST }} \
-            --build-arg RAPID_API_KEY=${{ secrets.RAPID_API_KEY }} \
-            -f Dockerfile.backend \
-            -t backend .
+            --build-arg RAPID_API_HOST=judge0-ce.p.rapidapi.com \
+            --build-arg RAPID_API_KEY=dummy-key \
+            .
 
-      - name: Push to Registry
+      - name: Build Summary
         run: |
-          docker tag frontend ${{ secrets.DOCKER_REGISTRY }}/frontend:latest
-          docker tag backend ${{ secrets.DOCKER_REGISTRY }}/backend:latest
-          docker push ${{ secrets.DOCKER_REGISTRY }}/frontend:latest
-          docker push ${{ secrets.DOCKER_REGISTRY }}/backend:latest
+          echo "✅ Frontend build successful"
+          echo "✅ Backend build successful"
+          echo "✅ Docker images built successfully"
+          echo "🚀 Ready for deployment!"
