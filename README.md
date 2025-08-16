@@ -1,28 +1,84 @@
-## Usage
+# Code Realm
 
-```bash
-$ npm install # or pnpm install or yarn install
+A collaborative coding platform built with SolidJS, TypeScript, and Firebase.
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+
+- Docker Desktop
+
+### Development Setup
+
+1. **Clone and Install**
+   ```bash
+   git clone https://github.com/utsAv123967/Code-Realm.git
+   cd Code-Realm
+   npm install
+   ```
+
+2. **Environment Setup**
+   ```bash
+   # Copy environment template
+   cp .env.example .env
+   
+   # Add your Firebase and RapidAPI credentials to .env
+   ```
+
+3. **Run Development Server**
+   ```bash
+   npm run dev
+   ```
+
+### Docker Deployment
+
+1. **Build and Run**
+   ```bash
+   docker-compose up --build
+   ```
+
+2. **Access Services**
+   - Frontend: http://localhost:8080
+   - Backend API: http://localhost:5000
+
+## 📁 Project Structure
+
+```
+├── src/
+│   ├── Frontend/          # SolidJS frontend components
+│   ├── Backend/           # Express.js API server
+│   └── assets/            # Static assets
+├── docker-compose.yml     # Development container setup
+├── Dockerfile            # Frontend container
+├── Dockerfile.backend    # Backend container
+└── .env.example          # Environment template
 ```
 
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
+## 🔧 Technologies
 
-## Available Scripts
+- **Frontend**: SolidJS, TypeScript, Tailwind CSS, Vite
+- **Backend**: Express.js, Judge0 API
+- **Database**: Firebase Firestore
+- **Authentication**: Firebase Auth
+- **Deployment**: Docker, GitHub Actions
 
-In the project directory, you can run:
+## 📖 Documentation
 
-### `npm run dev`
+- [`prep.md`](./prep.md) - Development preparation notes
+- [`PRESENTATION_GUIDE.md`](./PRESENTATION_GUIDE.md) - Presentation guidelines
 
-Runs the app in the development mode.<br>
-Open [http://localhost:5173](http://localhost:5173) to view it in the browser.
+## 🌐 Environment Variables
 
-### `npm run build`
+Required environment variables are documented in `.env.example`. 
 
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles Solid in production mode and optimizes the build for the best performance.
+**Important**: Never commit actual `.env` files to the repository!
 
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
+## 🚢 Deployment
 
-## Deployment
+The project includes Docker configuration for easy deployment to any cloud platform that supports containers.
 
-Learn more about deploying your application with the [documentations](https://vite.dev/guide/static-deploy.html)
+For production deployment, create a `.env.production` file with your production environment variables and use the provided Docker Compose configuration.
+
+## 📝 License
+
+This project is part of an educational initiative.

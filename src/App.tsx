@@ -6,18 +6,10 @@ import LiveCodingRoom from "./Frontend/components/Room/CodingRoom";
 import Home_new from "./Frontend/pages/Home_new";
 import Navbar from "./Frontend/components/General/Navbar";
 import Dashboard from "./Frontend/components/dashboard/Dashboard";
-import Test from "./Frontend/Test";
 import ProtectedRoute from "./Frontend/components/General/ProtectedRoute";
 import AuthRedirect from "./Frontend/components/General/AuthRedirect";
-import { auth } from "./Backend/Database/firebase";
-import { RoomProvider } from "./Frontend/context/RoomContext";
+import { RoomProvider } from "./context/RoomContext";
 function App() {
-  // Expose auth globally for debugging from root App
-  if (typeof window !== "undefined") {
-    (window as any).appAuth = auth;
-    console.log("🚀 App: Firebase auth exposed as window.appAuth");
-  }
-
   return (
     <>
       <Navbar />
@@ -59,7 +51,6 @@ function App() {
             </ProtectedRoute>
           )}
         />
-        <Route path='/test' component={Test} />
       </Router>
     </>
   );

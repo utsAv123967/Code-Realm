@@ -26,13 +26,8 @@ import {
   ActivityTracker,
   generateSampleActivities,
 } from "../../../utils/activityTracker";
-import { useRoomContext } from "../../context/RoomContext";
+import { useRoomContext } from "../../../context/RoomContext";
 const Dashboard = () => {
-  // Debug: Log user authentication status
-  console.log("Dashboard loaded - User ID:", userId());
-  console.log("Dashboard loaded - Current User:", getCurrentUser());
-
-  // Use room context instead of direct API calls
   const roomContext = useRoomContext();
 
   const [activeTab, setActiveTab] = createSignal<
@@ -44,7 +39,6 @@ const Dashboard = () => {
   >("all");
   const [createRoomModalOpen, setCreateRoomModalOpen] = createSignal(false);
 
-  // Handle joining a room
   const handleJoinRoom = async (roomId: string) => {
     const currentUserId = userId();
     if (!currentUserId) {
@@ -53,11 +47,9 @@ const Dashboard = () => {
     }
 
     try {
-      console.log("🔄 Joining room:", roomId);
       await applyToRoom(roomId, currentUserId);
-      console.log("✅ Successfully joined room!");
+      alert("✅ Successfully joined room!");
 
-      // Track the activity
       const room =
         roomContext.userRooms().find((r) => r.RoomId === roomId) ||
         roomContext.availableRooms().find((r) => r.RoomId === roomId);
@@ -74,7 +66,6 @@ const Dashboard = () => {
     }
   };
 
-  // Get rooms categorized by user relationship
   const createdRooms = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return [];
@@ -96,18 +87,8 @@ const Dashboard = () => {
       );
   });
 
-  // Remove the old availableRooms memo since we now get it from context
-  // const availableRooms = createMemo(() => {
-  //   const currentUserId = userId();
-  //   if (!currentUserId) return [];
-  //   // For now, we'll show all user rooms as available
-  //   return roomContext.userRooms();
-  // });
-
-  // Watch for tab changes and fetch available rooms when "Join Room" is selected
   createEffect(() => {
     if (activeTab() === "Join Room") {
-      console.log("🔄 Join Room tab selected, fetching available rooms...");
       roomContext.fetchAvailableRooms();
     }
   });
@@ -160,7 +141,6 @@ const Dashboard = () => {
     });
   });
 
-  // Load activities on component mount
   setTimeout(() => loadActivities(), 100);
 
   return (

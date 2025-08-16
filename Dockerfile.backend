@@ -1,0 +1,34 @@
+# Backend Dockerfile for the code compilation service
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Define build arguments for backend environment variables
+ARG NODE_ENV
+ARG PORT
+ARG RAPID_API_HOST
+ARG RAPID_API_KEY
+
+# Set environment variables from build arguments
+ENV NODE_ENV $NODE_ENV
+ENV PORT $PORT
+ENV RAPID_API_HOST $RAPID_API_HOST
+ENV RAPID_API_KEY $RAPID_API_KEY
+
+# Install dependencies for the backend
+COPY package*.json ./
+
+# Install only production dependencies for the backend
+RUN npm install --production --legacy-peer-deps
+
+# Copy the backend source code
+COPY src/Backend/ ./src/Backend/
+
+# Expose the port the backend runs on
+EXPOSE 5000
+
+# Set the working directory to where the backend index.js is located
+WORKDIR /app/src/Backend
+
+# Start the backend server
+CMD ["node", "index.js"]

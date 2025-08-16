@@ -7,6 +7,13 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Environment files (NEVER commit these!)
+.env
+.env.local
+.env.production
+.env.staging
+.env.*.local
+
 # Dependency directories
 node_modules/
 
@@ -54,3 +61,20 @@ Thumbs.db
 
 # Optional: Netlify
 .netlify/
+
+# Docker and deployment files
+.env.production
+deploy-production.ps1
+deploy-production.sh
+
+# Documentation that shouldn't be in main repo
+*_GUIDE.md
+*_SETUP*.md
+*_FIX.md
+*_SIMPLIFIED.md
+README-Docker.md
+
+# Temporary files
+temp.tsx
+*.tmp
+*.temp

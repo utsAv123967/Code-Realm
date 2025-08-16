@@ -4,10 +4,10 @@ import { db } from "./firebase";
 export async function Add_to_createdID({ UserId }: { UserId: string } , {roomId}: {roomId: string}) {
   
 
-  const userRef = doc(db, "Users", UserId); // reference to the user document
+  const userRef = doc(db, "Users", UserId); 
 
   await updateDoc(userRef, {
-    createdRoomids: arrayUnion(roomId), // add room ID to the array
+    createdRoomids: arrayUnion(roomId),
   });
 
   return roomId;

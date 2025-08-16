@@ -28,12 +28,10 @@ export interface TypingUser {
 }
 
 class FirebaseChatService {
-  // Signals for reactive state
-  private isConnectedSignal = createSignal(true); // Firebase is always "connected"
+  private isConnectedSignal = createSignal(true);
   private messagesSignal = createSignal<ChatMessage[]>([]);
   private typingUsersSignal = createSignal<string[]>([]);
   
-  // Store unsubscribe functions for cleanup
   private unsubscribeMessages: (() => void) | null = null;
   private currentRoomId: string | null = null;
 
@@ -41,7 +39,7 @@ class FirebaseChatService {
     console.log("🔥 Firebase Chat Service initialized");
   }
 
-  // Send a message to a room
+  
   public async sendMessage(roomId: string, userId: string, username: string, content: string): Promise<void> {
     try {
       await addDoc(collection(db, "ChatMessages"), {
@@ -57,34 +55,32 @@ class FirebaseChatService {
     }
   }
 
-  // Send typing indicator
-  public async sendTyping(_roomId: string, _userId: string, username: string, isTyping: boolean): Promise<void> {
-    // For typing indicators, we can use a simpler local approach since they're temporary
-    if (isTyping) {
-      this.typingUsersSignal[1](prev => [...prev.filter(u => u !== username), username]);
-    } else {
-      this.typingUsersSignal[1](prev => prev.filter(u => u !== username));
-    }
-  }
+ 
+  // public async sendTyping(_roomId: string, _userId: string, username: string, isTyping: boolean): Promise<void> {
+    
+  //   if (isTyping) {
+  //     this.typingUsersSignal[1](prev => [...prev.filter(u => u !== username), username]);
+  //   } else {
+  //     this.typingUsersSignal[1](prev => prev.filter(u => u !== username));
+  //   }
+  // }
 
-  // Join a room and start listening for messages
+  
   public joinRoom(roomId: string, userId: string, _username: string): void {
-    // If we're already in a room, leave it first
+    
     if (this.currentRoomId && this.currentRoomId !== roomId) {
       this.leaveRoom(this.currentRoomId, userId);
     }
     
     this.currentRoomId = roomId;
     
-    // Start listening for messages in this room (no join message)
+    
     this.listenForMessages(roomId);
   }
 
   // Leave a room
-  public leaveRoom(roomId: string, _userId: string): void {
-    console.log(`🚪 Leaving room ${roomId}`);
+  public leaveRoom(_roomId: string, _userId: string): void {
     
-    // Clean up message listener
     if (this.unsubscribeMessages) {
       this.unsubscribeMessages();
       this.unsubscribeMessages = null;
@@ -102,8 +98,7 @@ class FirebaseChatService {
   private listenForMessages(roomId: string): void {
     const messagesRef = collection(db, "ChatMessages");
     
-    // Query for recent messages (last 100 messages in the room)
-    // Using limit to avoid fetching too many old messages
+    
     const q = query(
       messagesRef,
       where("roomId", "==", roomId),

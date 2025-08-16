@@ -4,17 +4,12 @@ import { userId } from "./Userdetails";
 import type { Room } from "../types";
 
 export async function fetchAllRooms() {
-  console.log("🔄 Fetching all rooms from database...");
   const querySnapshot = await getDocs(collection(db, "Rooms"));
-  console.log("📋 Found", querySnapshot.docs.length, "rooms in database");
   
   const rooms: Room[] = querySnapshot.docs
     .map(doc => {
       const data = doc.data();
-      console.log("🏠 Processing room:", doc.id, data);
-      
-      // Validate that the document has required Room properties
-      if (data.Createdby && data.Name && data.Description !== undefined) { // Fixed: Allow empty string descriptions
+      if (data.Createdby && data.Name && data.Description !== undefined) { // 
         return {
           Applicants: data.Applicants || [],
           Createdby: data.Createdby,
@@ -29,37 +24,34 @@ export async function fetchAllRooms() {
           files: data.files || [],
           isActive: true,
         } as Room;
-      } else {
-        console.log("❌ Skipping invalid room:", doc.id, "Missing required fields");
       }
+      // else {
+      //   console.log("❌ Skipping invalid room:", doc.id, "Missing required fields");
+      // }
       return null;
     })
     .filter((room): room is Room => room !== null);
 
-  console.log("✅ Valid rooms processed:", rooms.length);
 
   const created: Room[] = [];
   const joined: Room[] = [];
-  const available: Room[] = []; // NEW: Available rooms to join
+  const available: Room[] = []; // Available rooms to join
 
   const currentUserId = userId();
-  console.log("👤 Current user ID:", currentUserId);
   
   for (const room of rooms) {
-    if (currentUserId && room.Createdby === currentUserId) { // Fixed: Safely check user ID
+    if (currentUserId && room.Createdby === currentUserId) { 
       created.push(room);
-      console.log("📝 Added to created rooms:", room.Name);
-    } else if (currentUserId && room.Users?.includes(currentUserId)) { // Fixed: Safely check user ID
+    } else if (currentUserId && room.Users?.includes(currentUserId)) {  
       joined.push(room);
-      console.log("👥 Added to joined rooms:", room.Name);
     } else if (currentUserId && room.Createdby !== currentUserId && !room.Users?.includes(currentUserId)) {
-      // NEW: Room not created by user and user hasn't joined it yet
+      
       available.push(room);
-      console.log("🔍 Added to available rooms:", room.Name);
+      
     }
   }
 
-  console.log("📊 Final results - Created:", created.length, "Joined:", joined.length, "Available:", available.length);
+  
 
   return { createdRooms: created, joinedRooms: joined, availableRooms: available };
 }

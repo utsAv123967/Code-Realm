@@ -1,6 +1,11 @@
 import { onCleanup, onMount } from "solid-js";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import jsLogo from "../../../assets/Home_new/js-logo.png";
+import pyLogo from "../../../assets/Home_new/python-logo.png";
+import tsLogo from "../../../assets/Home_new/ts-logo.png";
+import cLogo from "../../../assets/Home_new/png-clipart-c-logo-c-programming-language-icon-letter-c-blue-logo 1.png";
+import goLogo from "../../../assets/Home_new/go-logo.png";
 
 // Register the plugin
 gsap.registerPlugin(ScrollTrigger);
@@ -9,7 +14,7 @@ interface Language {
   language: string;
   tagline: string;
   description: string;
-  logoSrc: string;
+  logoSrc: any;
   gradientColors: string;
   accentColor: string;
   officialDocsUrl: string;
@@ -24,7 +29,7 @@ export default function LanguagesSection() {
       tagline: "The Language of the Web",
       description:
         "JavaScript is the programming language of the web. Build interactive websites, web applications, and server-side applications.",
-      logoSrc: "src/assets/Home_new/js-logo.png",
+      logoSrc: jsLogo,
       gradientColors: "from-yellow-400 via-orange-400 to-red-400",
       accentColor: "#f7df1e",
       officialDocsUrl:
@@ -41,7 +46,7 @@ export default function LanguagesSection() {
       tagline: "Simple, Powerful, Versatile",
       description:
         "Python is known for its simplicity and readability. Perfect for data science, AI, web development, and automation.",
-      logoSrc: "src/assets/Home_new/python-logo.png",
+      logoSrc: pyLogo,
       gradientColors: "from-blue-400 via-blue-500 to-yellow-400",
       accentColor: "#3776ab",
       officialDocsUrl: "https://docs.python.org/3/",
@@ -57,7 +62,7 @@ export default function LanguagesSection() {
       tagline: "JavaScript with Types",
       description:
         "TypeScript adds static typing to JavaScript, making it more reliable for large-scale applications and better developer experience.",
-      logoSrc: "src/assets/Home_new/ts-logo.png",
+      logoSrc: tsLogo,
       gradientColors: "from-blue-600 via-blue-700 to-blue-800",
       accentColor: "#3178c6",
       officialDocsUrl: "https://www.typescriptlang.org/docs/",
@@ -73,8 +78,7 @@ export default function LanguagesSection() {
       tagline: "Write Once, Run Anywhere",
       description:
         "Java is a robust, object-oriented language used for enterprise applications, Android development, and backend systems.",
-      logoSrc:
-        "src/assets/Home_new/png-clipart-c-logo-c-programming-language-icon-letter-c-blue-logo 1.png",
+      logoSrc: cLogo,
       gradientColors: "from-red-500 via-orange-500 to-yellow-500",
       accentColor: "#ed8b00",
       officialDocsUrl: "https://docs.oracle.com/en/java/",
@@ -90,8 +94,7 @@ export default function LanguagesSection() {
       tagline: "Power and Performance",
       description:
         "C++ is a powerful language for system programming, game development, and high-performance applications.",
-      logoSrc:
-        "src/assets/Home_new/png-clipart-c-logo-c-programming-language-icon-letter-c-blue-logo 1.png",
+      logoSrc: cLogo,
       gradientColors: "from-blue-600 via-purple-600 to-pink-600",
       accentColor: "#00599c",
       officialDocsUrl: "https://cppreference.com/",
@@ -107,7 +110,7 @@ export default function LanguagesSection() {
       tagline: "Fast, Simple, Reliable",
       description:
         "Go is designed for building scalable, concurrent applications. Perfect for microservices, cloud computing, and DevOps.",
-      logoSrc: "src/assets/Home_new/go-logo.png",
+      logoSrc: goLogo,
       gradientColors: "from-cyan-400 via-blue-500 to-blue-600",
       accentColor: "#00add8",
       officialDocsUrl: "https://golang.org/doc/",

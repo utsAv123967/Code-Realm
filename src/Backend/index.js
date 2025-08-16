@@ -17,6 +17,11 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Health check endpoint for Docker
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", message: "Backend is running" });
+});
+
 const RAPID_API_HOST = process.env.RAPID_API_HOST;
 const RAPID_API_KEY = process.env.RAPID_API_KEY;
 

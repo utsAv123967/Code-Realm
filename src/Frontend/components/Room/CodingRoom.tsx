@@ -14,7 +14,7 @@ import {
 } from "solid-icons/fi";
 import { languages } from "../../../../languages.ts";
 import { userId } from "../../../context/Userdetails";
-import { useRoomContext } from "../../context/RoomContext";
+import { useRoomContext } from "../../../context/RoomContext.tsx";
 
 // import setUser from "../../../Backend/Database/SetUser.ts";
 import CreateFileModal from "../../modals/createFile.tsx";
@@ -534,7 +534,9 @@ int main() {
     const id = languageMatch.id;
 
     try {
-      const res = await fetch("http://localhost:5000/api/compile", {
+      const base =
+        import.meta.env.VITE_COMPILER_API_BASE || "http://localhost:5000";
+      const res = await fetch(`${base}/api/compile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

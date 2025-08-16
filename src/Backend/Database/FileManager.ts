@@ -2,18 +2,17 @@ import {
   doc, 
   updateDoc, 
   arrayUnion, 
-  addDoc, 
   collection, 
   query, 
   where, 
   getDocs,
   getDoc,
-  setDoc
+  deleteDoc
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { Create_File_Data } from "./Create_file_data";
 import type { DatabaseFile } from "../../types";
-
-
+import { Update_File } from "./Update_File";
 export const createFile = async (
   roomId: string, 
   fileName: string, 
@@ -22,36 +21,24 @@ export const createFile = async (
   createdBy: string
 ) => {
   try {
-    console.log("📁 Creating new file:", { roomId, fileName, language });
 
-    // Create file document in Files collection
-    const fileData: Omit<DatabaseFile, 'fileId'> = {
-      name: fileName,
-      code: code,
-      lastChanged: new Date(),
-      roomId: roomId,
-      language: language,
-      createdBy: createdBy
-    };
-
-    const fileRef = await addDoc(collection(db, "Files"), fileData);
-    const fileId = fileRef.id;
-
-    console.log("✅ File created with ID:", fileId);
-
-    // Add file ID to room's files array
-    const roomRef = doc(db, "Rooms", roomId);
-    await updateDoc(roomRef, {
-      files: arrayUnion(fileId),
-      updatedAt: new Date()
+    const file = await Create_File_Data({
+      fileName,
+      code,
+      roomId,
+      language,
+      createdBy
     });
 
-    console.log("✅ File ID added to room");
-
+    const roomRef = doc(db, "Rooms", roomId);
+    await updateDoc(roomRef, {
+      files: arrayUnion(file.fileId),
+      updatedAt: new Date()
+    });
     return { 
       success: true, 
-      fileId,
-      file: { ...fileData, fileId } as DatabaseFile
+      fileId: file.fileId,
+      file: { ...file.fileData, fileId: file.fileId } as DatabaseFile
     };
   } catch (error) {
     console.error("❌ Error creating file:", error);
@@ -62,27 +49,19 @@ export const createFile = async (
 
 export const updateFileContent = async (fileId: string, code: string) => {
   try {
-    console.log("💾 Updating file content:", fileId);
-
-    const fileRef = doc(db, "Files", fileId);
-    await updateDoc(fileRef, {
-      code: code,
-      lastChanged: new Date()
-    });
-
-    console.log("✅ File content updated");
-    return { success: true };
+    const result = await Update_File(fileId, code);
+    if (result && result.success) {
+      return result;
+    }
+    return { success: false, error: "Failed to update file" };
   } catch (error) {
-    console.error("❌ Error updating file:", error);
-    return { success: false, error };
+    return { success: false, error: (error as Error).message ?? error };
   }
 };
 
 
 export const loadRoomFiles = async (roomId: string): Promise<DatabaseFile[]> => {
   try {
-    console.log("🔍 Loading files for room:", roomId);
-
     const filesQuery = query(
       collection(db, "Files"),
       where("roomId", "==", roomId)
@@ -104,7 +83,6 @@ export const loadRoomFiles = async (roomId: string): Promise<DatabaseFile[]> => 
       });
     });
 
-    console.log(`✅ Loaded ${files.length} files for room`);
     return files;
   } catch (error) {
     console.error("❌ Error loading room files:", error);
@@ -114,15 +92,13 @@ export const loadRoomFiles = async (roomId: string): Promise<DatabaseFile[]> => 
 
 export const loadFilesByIds = async (fileIds: string[]): Promise<DatabaseFile[]> => {
   try {
-    console.log("🔍 Loading files by IDs:", fileIds);
-
     if (!fileIds || fileIds.length === 0) {
       return [];
     }
 
     const files: DatabaseFile[] = [];
     
-    // Load each file individually (Firestore doesn't support array-contains-any for document IDs)
+    
     const promises = fileIds.map(async (fileId) => {
       try {
         const fileRef = doc(db, "Files", fileId);
@@ -149,12 +125,12 @@ export const loadFilesByIds = async (fileIds: string[]): Promise<DatabaseFile[]>
 
     const results = await Promise.all(promises);
     
-    // Filter out null results
+    
     results.forEach(file => {
       if (file) files.push(file);
     });
 
-    console.log(`✅ Loaded ${files.length} files from ${fileIds.length} IDs`);
+    
     return files;
   } catch (error) {
     console.error("❌ Error loading files by IDs:", error);
@@ -164,13 +140,10 @@ export const loadFilesByIds = async (fileIds: string[]): Promise<DatabaseFile[]>
 
 export const deleteFile = async (fileId: string, roomId: string) => {
   try {
-    console.log("🗑️ Deleting file:", fileId);
-
-    // Remove file from Files collection
+    
     const fileRef = doc(db, "Files", fileId);
-    await setDoc(fileRef, {}, { merge: false }); // This effectively deletes the document
-
-    // Remove file ID from room's files array
+    await deleteDoc(fileRef);
+    
     const roomRef = doc(db, "Rooms", roomId);
     const roomSnap = await getDoc(roomRef);
     
@@ -183,8 +156,6 @@ export const deleteFile = async (fileId: string, roomId: string) => {
         updatedAt: new Date()
       });
     }
-
-    console.log("✅ File deleted successfully");
     return { success: true };
   } catch (error) {
     console.error("❌ Error deleting file:", error);

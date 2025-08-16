@@ -118,14 +118,6 @@
 - **Focus**: Create, update, delete files
 - **Key Concepts**: Real-time file synchronization
 
-**16. `src/Backend/Database/AddFile.ts`**
-
-- **Purpose**: File creation logic
-- **Focus**: Adding files to room documents
-- **Key Concepts**: Database operations, file metadata
-
----
-
 ## **PHASE 6: REAL-TIME CHAT SYSTEM**
 
 **17. `src/Frontend/services/firebaseChatService.ts`** ⭐ **SUPER CRITICAL**

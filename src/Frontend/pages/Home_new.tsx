@@ -2,6 +2,11 @@ import { onMount } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { GsapPage } from "./Gsap.ts";
 import LanguagesSection from "../components/Landing_Page/LanguagesSection.tsx";
+import chaseImg from "../../assets/Home_new/chase.png";
+import helloImg from "../../assets/Home_new/hello-illustration.png";
+import enterpriseImg from "../../assets/Home_new/003-enterprise.png";
+import diagramImg from "../../assets/Home_new/004-diagram.png";
+import teamImg from "../../assets/Home_new/team.png";
 
 export default function Home_new() {
   const navigate = useNavigate();
@@ -19,11 +24,7 @@ export default function Home_new() {
       <div
         id='cursor'
         class='h-[40px] w-[40px] rounded-full z-[100] fixed top-0 left-0 pointer-events-none'>
-        <img
-          src='src\assets\Home_new\chase.png'
-          alt=''
-          class='h-full w-full object-cover'
-        />
+        <img src={chaseImg} alt='' class='h-full w-full object-cover' />
       </div>
 
       {/* Hero Section */}
@@ -76,7 +77,7 @@ export default function Home_new() {
             <div class='absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-600 rounded-3xl opacity-20 blur-3xl'></div>
             <img
               id='pic1'
-              src='src\assets\Home_new\hello-illustration.png'
+              src={helloImg}
               alt='Coding illustration'
               class='relative z-10 w-full max-w-lg mx-auto drop-shadow-2xl'
             />
@@ -114,11 +115,7 @@ export default function Home_new() {
             {/* Feature 1 */}
             <div class='bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100'>
               <div class='w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mb-6'>
-                <img
-                  src='src\assets\Home_new\003-enterprise.png'
-                  alt='Teams'
-                  class='w-8 h-8'
-                />
+                <img src={enterpriseImg} alt='Teams' class='w-8 h-8' />
               </div>
               <h3 class='text-xl font-bold text-gray-800 mb-4'>
                 Real-time Collaboration
@@ -132,11 +129,7 @@ export default function Home_new() {
             {/* Feature 2 */}
             <div class='bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100'>
               <div class='w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center mb-6'>
-                <img
-                  src='src\assets\Home_new\004-diagram.png'
-                  alt='Projects'
-                  class='w-8 h-8'
-                />
+                <img src={diagramImg} alt='Projects' class='w-8 h-8' />
               </div>
               <h3 class='text-xl font-bold text-gray-800 mb-4'>
                 Project Management
@@ -150,11 +143,7 @@ export default function Home_new() {
             {/* Feature 3 */}
             <div class='bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100'>
               <div class='w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center mb-6'>
-                <img
-                  src='src\assets\Home_new\team.png'
-                  alt='Community'
-                  class='w-8 h-8'
-                />
+                <img src={teamImg} alt='Community' class='w-8 h-8' />
               </div>
               <h3 class='text-xl font-bold text-gray-800 mb-4'>
                 AI-Powered Assistance

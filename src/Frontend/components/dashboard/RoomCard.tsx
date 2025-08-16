@@ -22,7 +22,7 @@ import {
   Sparkles,
 } from "lucide-solid";
 import type { Room } from "../../../types";
-import { useRoomContext } from "../../context/RoomContext";
+import { useRoomContext } from "../../../context/RoomContext";
 
 const getRoomIcon = (hasUsers: boolean) => {
   // Since Room type doesn't have a 'type' property, we'll determine type based on Users array

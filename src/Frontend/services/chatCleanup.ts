@@ -5,22 +5,17 @@ import {
   collection, 
   query, 
   orderBy, 
-  limit, 
   getDocs, 
   deleteDoc,
   doc,
   where,
   Timestamp
 } from "firebase/firestore";
-import { db } from "../Backend/Database/firebase";
+import { db } from "../../Backend/Database/firebase";
 
-/**
- * Clean up old chat messages to prevent storage bloat
- * Standard approach: Keep last 200 messages per room, delete older ones
- */
+
 export async function cleanupOldMessages(roomId?: string) {
   try {
-    const messagesRef = collection(db, "ChatMessages");
     
     if (roomId) {
       // Clean up specific room
@@ -50,15 +45,12 @@ async function cleanupRoomMessages(roomId: string) {
   const snapshot = await getDocs(q);
   const messages = snapshot.docs;
   
-  // Keep newest 200 messages, delete the rest
+  
   const MESSAGES_TO_KEEP = 200;
   
   if (messages.length > MESSAGES_TO_KEEP) {
     const messagesToDelete = messages.slice(MESSAGES_TO_KEEP);
     
-    console.log(`Cleaning up ${messagesToDelete.length} old messages from room ${roomId}`);
-    
-    // Delete old messages in batches
     const batchSize = 10;
     for (let i = 0; i < messagesToDelete.length; i += batchSize) {
       const batch = messagesToDelete.slice(i, i + batchSize);
@@ -69,9 +61,6 @@ async function cleanupRoomMessages(roomId: string) {
   }
 }
 
-/**
- * Delete messages older than X days
- */
 export async function deleteOldMessages(daysOld: number = 30) {
   try {
     const cutoffDate = new Date();
@@ -85,9 +74,7 @@ export async function deleteOldMessages(daysOld: number = 30) {
     
     const snapshot = await getDocs(q);
     
-    console.log(`Deleting ${snapshot.docs.length} messages older than ${daysOld} days`);
     
-    // Delete in batches
     const batchSize = 10;
     for (let i = 0; i < snapshot.docs.length; i += batchSize) {
       const batch = snapshot.docs.slice(i, i + batchSize);

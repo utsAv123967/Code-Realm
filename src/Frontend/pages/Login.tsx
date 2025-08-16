@@ -23,12 +23,6 @@ import {
 const Login = () => {
   const navigate = useNavigate();
 
-  // Expose auth globally for debugging (Login page specific)
-  if (typeof window !== "undefined") {
-    (window as any).loginAuth = auth;
-    console.log("🔑 Login: Firebase auth exposed as window.loginAuth");
-  }
-
   const [isLogin, setIsLogin] = createSignal(true);
   const [email, setEmail] = createSignal("");
   const [password, setPassword] = createSignal("");
@@ -45,7 +39,6 @@ const Login = () => {
     try {
       if (isLogin()) {
         await signInWithEmailAndPassword(auth, email(), password());
-        console.log("User logged in successfully");
       } else {
         // Create new user
         const userCredential = await createUserWithEmailAndPassword(
@@ -107,7 +100,7 @@ const Login = () => {
     }
   };
 
-  const getErrorMessage = (errorCode: string) => {
+  const getErrorMessage = (_errorCode: string) => {
     return "something went wrong. Please try again.";
   };
 

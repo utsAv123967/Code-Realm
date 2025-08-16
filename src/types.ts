@@ -2,13 +2,12 @@ export interface file_objects {
   name: string;
   body: string;
   language: string;
-  fileId?: string; // Optional for local files
+  fileId?: string; 
   lastChanged?: Date;
   roomId?: string;
-  hasUnsavedChanges?: boolean; // Track unsaved changes
+  hasUnsavedChanges?: boolean; 
 }
 
-// New interface for database file storage
 export interface DatabaseFile {
   fileId: string;
   name: string;
@@ -24,14 +23,14 @@ export interface Room {
   Applicants?:  object[];  
   Createdby: string; 
   Description: string;  
-  Messages:object[];        // Applicants (optional)                        // doc.id
-  Name: string;                        // Messages.Name
-  RoomId: string;                      // updatedAt (Firestore Timestamp)
-  Tags?: string[];                     // Tags (optional)
+  Messages:object[];        
+  Name: string;                        
+  RoomId: string;                      
+  Tags?: string[];                     
   Users?: string[];   
   createdAt:Date,
-  updatedAt:Date,                 // Users (optional)
-  files?: string[];      // Array of file IDs instead of filenames
+  updatedAt:Date,                 
+  files?: string[];      
   isActive:boolean;
   type: RoomType;
 }

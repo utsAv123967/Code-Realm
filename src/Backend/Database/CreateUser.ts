@@ -23,5 +23,5 @@ export async function createUser({
     createdRoomIds: [],
   });
 
-  console.log("User created successfully:", userId);
+  // console.log("User created successfully:", userId);
 }
