@@ -1,32 +1,11 @@
-// Dashboard.tsx
-import { createSignal, createMemo, For, Show, createEffect } from "solid-js";
-import { StatCard } from "./StatCard";
+import { createSignal, createMemo, For, Show, onMount } from "solid-js";
+import { Plus, Users, Zap, Code, Search, Sparkles, Compass, ArrowRight } from "lucide-solid";
 import { RoomCard } from "./RoomCard";
-import { ActivityCard } from "./ActivityCard";
-import { TabNav } from "./TabNav";
-import { Plus } from "lucide-solid";
-import {
-  Code,
-  Users,
-  Zap,
-  Clock,
-  Search,
-  User,
-  Mail,
-  Calendar,
-  Settings,
-  Activity,
-} from "lucide-solid";
-import type { ActivityItem } from "../../../types";
-import { CreateRoomModal } from "../../modals/createRoomModal";
 import { RoomApplicationCard } from "./RoomApplicationCard";
+import { CreateRoomModal } from "../../modals/createRoomModal";
+import { useRoomContext } from "../../context/RoomContext";
 import { userId, getCurrentUser } from "../../../context/Userdetails";
 import { applyToRoom } from "../../../Backend/Database/Apply_to_room";
-import {
-  ActivityTracker,
-  generateSampleActivities,
-} from "../../../utils/activityTracker";
-import { useRoomContext } from "../../context/RoomContext";
 const Dashboard = () => {
   // Debug: Log user authentication status
   console.log("Dashboard loaded - User ID:", userId());
@@ -35,14 +14,14 @@ const Dashboard = () => {
   // Use room context instead of direct API calls
   const roomContext = useRoomContext();
 
-  const [activeTab, setActiveTab] = createSignal<
-    "overview" | "joined" | "created" | "Join Room" | "activity"
-  >("overview");
   const [searchTerm, setSearchTerm] = createSignal("");
-  const [filterType, setFilterType] = createSignal<
-    "all" | "public" | "private"
-  >("all");
+  const [viewFilter, setViewFilter] = createSignal<"all" | "joined" | "created">("all");
+  const filters = ["all", "created", "joined"] as const;
   const [createRoomModalOpen, setCreateRoomModalOpen] = createSignal(false);
+
+  onMount(() => {
+    roomContext.fetchAvailableRooms();
+  });
 
   // Handle joining a room
   const handleJoinRoom = async (roomId: string) => {
@@ -53,28 +32,15 @@ const Dashboard = () => {
     }
 
     try {
-      console.log("🔄 Joining room:", roomId);
+      console.log("Joining room:", roomId);
       await applyToRoom(roomId, currentUserId);
-      console.log("✅ Successfully joined room!");
-
-      // Track the activity
-      const room =
-        roomContext.userRooms().find((r) => r.RoomId === roomId) ||
-        roomContext.availableRooms().find((r) => r.RoomId === roomId);
-      if (room) {
-        ActivityTracker.trackRoomJoin(room.Name);
-        loadActivities(); // Refresh activities
-      }
-
-      // Refresh both user rooms and available rooms
       await roomContext.refreshRooms();
       await roomContext.fetchAvailableRooms();
     } catch (error) {
-      console.error("❌ Failed to join room:", error);
+      console.error("Failed to join room:", error);
     }
   };
 
-  // Get rooms categorized by user relationship
   const createdRooms = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return [];
@@ -96,47 +62,12 @@ const Dashboard = () => {
       );
   });
 
-  // Remove the old availableRooms memo since we now get it from context
-  // const availableRooms = createMemo(() => {
-  //   const currentUserId = userId();
-  //   if (!currentUserId) return [];
-  //   // For now, we'll show all user rooms as available
-  //   return roomContext.userRooms();
-  // });
-
-  // Watch for tab changes and fetch available rooms when "Join Room" is selected
-  createEffect(() => {
-    if (activeTab() === "Join Room") {
-      console.log("🔄 Join Room tab selected, fetching available rooms...");
-      roomContext.fetchAvailableRooms();
-    }
-  });
-
-  const [recentActivity, setRecentActivity] = createSignal<ActivityItem[]>([]);
-
-  // Load activities on component mount
-  const loadActivities = () => {
-    const activities = ActivityTracker.getRecentActivities(15);
-    if (activities.length === 0) {
-      // If no activities, show sample data
-      setRecentActivity(generateSampleActivities());
-    } else {
-      setRecentActivity(activities);
-    }
-  };
-
   const totalRooms = createMemo(
-    () =>
-      joinedRooms().length +
-      createdRooms().length +
-      roomContext.availableRooms().length
+    () => createdRooms().length + joinedRooms().length
   );
 
   const activeRooms = createMemo(
-    () =>
-      joinedRooms().length +
-      createdRooms().length +
-      roomContext.availableRooms().length // All rooms are considered active since Room type doesn't have isActive
+    () => totalRooms() + roomContext.availableRooms().length
   );
 
   const totalMembers = createMemo(
@@ -144,473 +75,314 @@ const Dashboard = () => {
       [...joinedRooms(), ...createdRooms()].reduce(
         (sum, room) => sum + (room.Users?.length || 0),
         0
-      ) -
-      joinedRooms().length -
-      createdRooms().length +
-      1
+      )
   );
 
-  const filteredRooms = createMemo(() => {
-    const allRooms = [...joinedRooms(), ...createdRooms()];
-    const term = searchTerm().toLowerCase();
-    // Remove type filtering since Room type doesn't have a type property
-    return allRooms.filter((room) => {
-      const matchesSearch = room.Name.toLowerCase().includes(term);
-      return matchesSearch;
-    });
+  const filteredMyRooms = createMemo(() => {
+    const term = searchTerm().toLowerCase().trim();
+    let source = [...createdRooms(), ...joinedRooms()];
+
+    if (viewFilter() === "created") {
+      source = createdRooms();
+    } else if (viewFilter() === "joined") {
+      source = joinedRooms();
+    }
+
+    return source.filter((room) =>
+      room.Name.toLowerCase().includes(term)
+    );
   });
 
-  // Load activities on component mount
-  setTimeout(() => loadActivities(), 100);
+  const trendingTags = createMemo(() => {
+    const tags = new Set<string>();
+    [...createdRooms(), ...joinedRooms()].forEach((room) => {
+      room.Tags?.forEach((tag: string) => tags.add(tag));
+    });
+    return Array.from(tags).slice(0, 6);
+  });
+
+  const stats = createMemo(() => [
+    {
+      label: "Total rooms",
+      value: totalRooms(),
+      caption: "Spaces you collaborate in",
+      accent: "from-blue-500 via-indigo-500 to-blue-700",
+      icon: Code,
+    },
+    {
+      label: "Active spaces",
+      value: activeRooms(),
+      caption: "Including public rooms you can explore",
+      accent: "from-emerald-500 via-teal-500 to-emerald-600",
+      icon: Zap,
+    },
+    {
+      label: "Collaborators",
+      value: totalMembers(),
+      caption: "Teammates across your rooms",
+      accent: "from-purple-500 via-fuchsia-500 to-purple-600",
+      icon: Users,
+    },
+  ]);
+
+  const membershipDate = (() => {
+    const meta = (getCurrentUser() as any)?.metadata?.creationTime;
+    if (meta) {
+      return new Date(meta).toLocaleDateString();
+    }
+    return new Date().toLocaleDateString();
+  })();
+
+  const scrollToExplore = () => {
+    if (typeof window === "undefined") return;
+    const section = document.getElementById("explore-rooms");
+    section?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const goToAbout = () => {
+    if (typeof window === "undefined") return;
+    window.location.href = "/about";
+  };
+
+  const initials =
+    getCurrentUser()?.displayName?.charAt(0) ||
+    getCurrentUser()?.email?.charAt(0) ||
+    "U";
+
+  const displayName =
+    getCurrentUser()?.displayName ||
+    getCurrentUser()?.email?.split("@")[0] ||
+    "Creator";
 
   return (
-    <div class='min-h-screen bg-gray-50'>
-      {/* Header Section with User Profile */}
-      <div class='bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200'>
-        <div class='max-w-7xl mx-auto px-6 py-8'>
-          <div class='flex flex-col md:flex-row md:items-center md:justify-between gap-6'>
-            {/* User Profile Section */}
-            <div class='flex items-center gap-4'>
-              <div class='w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold text-xl shadow-lg'>
-                {getCurrentUser()?.displayName?.charAt(0) ||
-                  getCurrentUser()?.email?.charAt(0) ||
-                  "U"}
+    <div class='relative mt-14 pb-24'>
+      <div class='mx-auto max-w-7xl space-y-16 px-6'>
+        <section class='relative overflow-hidden rounded-[44px] border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-10 shadow-[0_40px_120px_-60px_rgba(8,15,45,0.8)] text-white'>
+          <div class='pointer-events-none absolute inset-0'>
+            <div class='absolute -left-20 top-0 h-64 w-64 rounded-full bg-blue-500/30 blur-3xl'></div>
+            <div class='absolute right-[-10%] bottom-[-20%] h-72 w-72 rounded-full bg-purple-500/25 blur-3xl'></div>
+            <div class='absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.18),_transparent_55%)]'></div>
+            <div class='absolute inset-0 bg-[linear-gradient(120deg,_rgba(255,255,255,0.06)_0%,_rgba(255,255,255,0)_40%,_rgba(255,255,255,0.12)_100%)] opacity-60'></div>
+          </div>
+
+          <div class='relative grid gap-10 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-center'>
+            <div class='space-y-6'>
+              <div class='inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.45em] text-white/70'>
+                <Sparkles size={14} />
+                <span>Creator control room</span>
               </div>
               <div>
-                <h1 class='text-2xl font-bold text-gray-900'>
-                  Welcome back, {getCurrentUser()?.displayName || "Developer"}!
-                </h1>
-                <div class='flex items-center gap-4 mt-2 text-sm text-gray-600'>
-                  <div class='flex items-center gap-1'>
-                    <Mail size={14} />
-                    <span>{getCurrentUser()?.email || "No email"}</span>
-                  </div>
-                  <div class='flex items-center gap-1'>
-                    <Calendar size={14} />
-                    <span>Joined {new Date().toLocaleDateString()}</span>
-                  </div>
-                  <div class='flex items-center gap-1'>
-                    <User size={14} />
-                    <span class='font-mono text-xs'>
-                      ID: {userId()?.slice(0, 8) || "No ID"}...
-                    </span>
-                  </div>
-                </div>
+                <h1 class='text-4xl font-bold tracking-tight sm:text-5xl'>Welcome back, {displayName}</h1>
+                <p class='mt-3 max-w-2xl text-base text-slate-100/80'>Craft premium coding experiences, manage your rooms, and discover collaborations curated for builders like you.</p>
               </div>
-            </div>
-
-            {/* Quick Stats Summary */}
-            <div class='flex gap-6'>
-              <div class='text-center'>
-                <div class='text-2xl font-bold text-blue-600'>
-                  {totalRooms()}
-                </div>
-                <div class='text-sm text-gray-600'>Total Rooms</div>
-              </div>
-              <div class='text-center'>
-                <div class='text-2xl font-bold text-green-600'>
-                  {activeRooms()}
-                </div>
-                <div class='text-sm text-gray-600'>Active</div>
-              </div>
-              <div class='text-center'>
-                <div class='text-2xl font-bold text-purple-600'>
-                  {totalMembers()}
-                </div>
-                <div class='text-sm text-gray-600'>Members</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div class='max-w-7xl mx-auto p-6'>
-        <TabNav activeTab={activeTab()} setActiveTab={setActiveTab} />
-        <Show when={activeTab() === "overview"}>
-          {/* Enhanced Stats Grid */}
-          <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-8'>
-            <StatCard
-              title='Total Rooms'
-              value={totalRooms()}
-              icon={<Code size={20} />}
-              color='bg-blue-100 text-blue-600'
-            />
-            <StatCard
-              title='Active Rooms'
-              value={activeRooms()}
-              icon={<Zap size={20} />}
-              color='bg-green-100 text-green-600'
-            />
-            <StatCard
-              title='Total Members'
-              value={totalMembers()}
-              icon={<Users size={20} />}
-              color='bg-purple-100 text-purple-600'
-            />
-          </div>
-
-          {/* Quick Actions and Recent Activity Grid */}
-          <div class='grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8'>
-            {/* Quick Actions Card */}
-            <div class='bg-white rounded-xl p-8 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200'>
-              <div class='flex items-center gap-3 mb-6'>
-                <div class='p-2 bg-blue-50 rounded-lg'>
-                  <Plus size={20} class='text-blue-600' />
-                </div>
-                <h3 class='text-xl font-semibold text-gray-900'>
-                  Quick Actions
-                </h3>
-              </div>
-              <div class='space-y-4'>
+              <div class='flex flex-wrap items-center gap-3'>
                 <button
-                  class='w-full flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded-xl hover:from-blue-100 hover:to-blue-200 transition-all duration-200 group'
+                  class='inline-flex items-center gap-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 shadow-lg shadow-white/20 transition hover:bg-slate-100'
                   onClick={() => setCreateRoomModalOpen(true)}>
-                  <div class='p-2 bg-blue-200 rounded-lg group-hover:bg-blue-300 transition-colors'>
-                    <Plus size={18} />
-                  </div>
-                  <div class='text-left'>
-                    <div class='font-medium'>Create New Room</div>
-                    <div class='text-sm text-blue-600'>
-                      Start a new coding session
-                    </div>
-                  </div>
+                  <Plus size={16} />
+                  <span>Create a room</span>
                 </button>
                 <button
-                  class='w-full flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-green-100 text-green-700 rounded-xl hover:from-green-100 hover:to-green-200 transition-all duration-200 group'
-                  onClick={() => setActiveTab("Join Room")}>
-                  <div class='p-2 bg-green-200 rounded-lg group-hover:bg-green-300 transition-colors'>
-                    <Users size={18} />
-                  </div>
-                  <div class='text-left'>
-                    <div class='font-medium'>Browse Public Rooms</div>
-                    <div class='text-sm text-green-600'>
-                      Join existing sessions
-                    </div>
-                  </div>
+                  class='inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10'
+                  onClick={scrollToExplore}>
+                  <Compass size={16} />
+                  <span>Discover rooms</span>
                 </button>
                 <button
-                  class='w-full flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 rounded-xl hover:from-purple-100 hover:to-purple-200 transition-all duration-200 group'
-                  onClick={() => setActiveTab("activity")}>
-                  <div class='p-2 bg-purple-200 rounded-lg group-hover:bg-purple-300 transition-colors'>
-                    <Clock size={18} />
-                  </div>
-                  <div class='text-left'>
-                    <div class='font-medium'>View Activity</div>
-                    <div class='text-sm text-purple-600'>
-                      Check recent updates
-                    </div>
-                  </div>
+                  class='inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10'
+                  onClick={goToAbout}>
+                  <ArrowRight size={16} />
+                  <span>About us</span>
                 </button>
               </div>
+              <Show when={trendingTags().length > 0}>
+                <div>
+                  <p class='text-xs font-semibold uppercase tracking-[0.4em] text-white/50'>Trending tags</p>
+                  <div class='mt-3 flex flex-wrap gap-2'>
+                    <For each={trendingTags()}>
+                      {(tag) => (
+                        <span class='inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70'>
+                          #{tag}
+                        </span>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
             </div>
 
-            {/* User Profile Summary Card */}
-            <div class='bg-white rounded-xl p-8 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200'>
-              <div class='flex items-center gap-3 mb-6'>
-                <div class='p-2 bg-gray-50 rounded-lg'>
-                  <User size={20} class='text-gray-600' />
+            <div class='relative rounded-[32px] border border-white/15 bg-white/10 p-6 backdrop-blur-2xl'>
+              <div class='flex items-center gap-4'>
+                <div class='flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-lg font-semibold text-white'>
+                  {initials}
                 </div>
-                <h3 class='text-xl font-semibold text-gray-900'>
-                  Profile Summary
-                </h3>
+                <div>
+                  <p class='text-xs uppercase tracking-[0.4em] text-white/50'>Member since</p>
+                  <p class='text-lg font-semibold text-white'>{membershipDate}</p>
+                </div>
               </div>
-              <div class='space-y-4'>
-                <div class='flex items-center justify-between p-4 bg-gray-50 rounded-xl'>
-                  <div class='flex items-center gap-3'>
-                    <div class='w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-medium text-sm'>
-                      {getCurrentUser()?.displayName?.charAt(0) ||
-                        getCurrentUser()?.email?.charAt(0) ||
-                        "U"}
-                    </div>
-                    <div>
-                      <div class='font-medium text-gray-900'>
-                        {getCurrentUser()?.displayName || "Anonymous User"}
+              <div class='mt-6 grid gap-3'>
+                <For each={stats()}>
+                  {(stat) => (
+                    <div class='flex items-center justify-between rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white/80'>
+                      <div class='flex items-center gap-2 text-white/70'>
+                        <stat.icon size={16} />
+                        <span>{stat.label}</span>
                       </div>
-                      <div class='text-sm text-gray-600'>
-                        {getCurrentUser()?.email}
-                      </div>
+                      <span class='text-base text-white'>{stat.value}</span>
                     </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class='grid gap-6 md:grid-cols-3'>
+          <For each={stats()}>
+            {(stat) => (
+              <div class={`group relative overflow-hidden rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-xl shadow-slate-200/60 backdrop-blur transition hover:shadow-2xl`}>
+                <div class={`absolute -top-20 right-0 h-40 w-40 opacity-40 blur-3xl bg-gradient-to-r ${stat.accent}`}></div>
+                <div class='relative flex flex-col gap-3'>
+                  <div class='inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-slate-500'>
+                    <stat.icon size={16} class='text-slate-400' />
+                    <span>{stat.label}</span>
                   </div>
-                  <button class='p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors'>
-                    <Settings size={16} />
+                  <div class='text-4xl font-bold tracking-tight text-slate-900'>{stat.value}</div>
+                  <p class='text-sm text-slate-600'>{stat.caption}</p>
+                </div>
+              </div>
+            )}
+          </For>
+        </section>
+
+        <section class='rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-2xl shadow-slate-200/60 backdrop-blur'>
+          <div class='flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between'>
+            <div>
+              <p class='text-xs font-semibold uppercase tracking-[0.4em] text-blue-600'>My rooms</p>
+              <h2 class='mt-2 text-3xl font-bold text-slate-900'>Spaces you steward</h2>
+              <p class='mt-2 max-w-2xl text-sm text-slate-600'>Jump back into active rooms or spin up something new. Filter by created or joined rooms to focus the list.</p>
+            </div>
+            <div class='flex flex-wrap items-center gap-3'>
+              <For each={filters}>
+                {(filter) => (
+                  <button
+                    class={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      viewFilter() === filter
+                        ? "bg-slate-900 text-white shadow"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                    onClick={() => setViewFilter(filter)}>
+                    {filter === "all" ? "All" : filter === "joined" ? "Joined" : "Created"}
                   </button>
-                </div>
-
-                <div class='grid grid-cols-2 gap-4'>
-                  <div class='text-center p-4 bg-blue-50 rounded-xl'>
-                    <div class='text-lg font-semibold text-blue-600'>
-                      {joinedRooms().length}
-                    </div>
-                    <div class='text-sm text-gray-600'>Joined Rooms</div>
-                  </div>
-                  <div class='text-center p-4 bg-green-50 rounded-xl'>
-                    <div class='text-lg font-semibold text-green-600'>
-                      {createdRooms().length}
-                    </div>
-                    <div class='text-sm text-gray-600'>Created Rooms</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Show>{" "}
-        <Show when={createRoomModalOpen()}>
-          <CreateRoomModal
-            isOpen={createRoomModalOpen()}
-            onClose={() => setCreateRoomModalOpen(false)}
-            onRoomCreated={async () => {
-              console.log("Room created, refreshing dashboard data...");
-              loadActivities(); // Refresh activities
-              await roomContext.refreshRooms();
-              await roomContext.fetchAvailableRooms();
-            }}
-          />
-        </Show>
-        <Show when={["joined", "created"].includes(activeTab())}>
-          {/* Enhanced Search and Filter Section */}
-          <div class='bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-8'>
-            <div class='flex flex-col md:flex-row gap-4'>
-              <div class='relative flex-1'>
-                <Search
-                  size={20}
-                  class='absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400'
-                />
-                <input
-                  type='text'
-                  placeholder='Search your rooms...'
-                  value={searchTerm()}
-                  onInput={(e) => setSearchTerm(e.target.value)}
-                  class='w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white transition-all duration-200'
-                />
-              </div>
-              <select
-                value={filterType()}
-                onChange={(e) => setFilterType(e.target.value as any)}
-                class='px-6 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white transition-all duration-200 min-w-[140px]'>
-                <option value='all'>All Types</option>
-                <option value='public'>Public</option>
-                <option value='private'>Private</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Rooms Grid with Better Spacing */}
-          <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-            <For
-              each={filteredRooms().filter((room) => {
-                if (activeTab() === "joined")
-                  return joinedRooms().includes(room);
-                if (activeTab() === "created")
-                  return createdRooms().includes(room);
-                return false;
-              })}>
-              {(room) => (
-                <RoomCard
-                  room={room}
-                  onApply={(roomId) => console.log("Apply to room:", roomId)}
-                />
-              )}
-            </For>
-          </div>
-
-          {/* Empty State */}
-          <Show
-            when={
-              filteredRooms().filter((room) => {
-                if (activeTab() === "joined")
-                  return joinedRooms().includes(room);
-                if (activeTab() === "created")
-                  return createdRooms().includes(room);
-                return false;
-              }).length === 0
-            }>
-            <div class='text-center py-16'>
-              <div class='w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4'>
-                <Code size={32} class='text-gray-400' />
-              </div>
-              <h3 class='text-lg font-medium text-gray-900 mb-2'>
-                {activeTab() === "joined"
-                  ? "No joined rooms yet"
-                  : "No created rooms yet"}
-              </h3>
-              <p class='text-gray-600 mb-6'>
-                {activeTab() === "joined"
-                  ? "Start by joining a public room or creating your own coding session"
-                  : "Create your first room to start collaborating with others"}
-              </p>
-              <button
-                onClick={() => setCreateRoomModalOpen(true)}
-                class='inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors duration-200'>
-                <Plus size={18} />
-                Create New Room
-              </button>
-            </div>
-          </Show>
-        </Show>
-        <Show when={activeTab() === "Join Room"}>
-          <div class='mb-8'>
-            <div class='text-center mb-8'>
-              <h2 class='text-2xl font-bold text-gray-900 mb-2'>
-                Discover Coding Rooms
-              </h2>
-              <p class='text-gray-600'>
-                Join public rooms and start collaborating with developers
-                worldwide
-              </p>
-              {/* Temporary debug button */}
-              <button
-                onClick={() => {
-                  console.log("🔄 Manual refresh triggered");
-                  roomContext.fetchAvailableRooms();
-                }}
-                class='mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600'>
-                🔄 Debug: Refresh Available Rooms
-              </button>
-              <div class='mt-2 text-sm text-gray-500'>
-                Debug: Available rooms count:{" "}
-                {roomContext.availableRooms().length} | Loading:{" "}
-                {roomContext.availableRoomsLoading() ? "Yes" : "No"} | User
-                rooms: {roomContext.userRooms().length} | Current User ID:{" "}
-                {userId()?.slice(0, 8) || "None"}...
-                {roomContext.error() && (
-                  <div class='mt-2 text-red-600'>
-                    Error: {roomContext.error()}
-                  </div>
-                )}
-              </div>
-              {/* Show available rooms for debugging */}
-              <div class='mt-4 p-4 bg-gray-100 rounded text-left text-sm'>
-                <h4 class='font-semibold mb-2'>Debug: Available Rooms List</h4>
-                <Show
-                  when={roomContext.availableRooms().length > 0}
-                  fallback={<p>No available rooms</p>}>
-                  <For each={roomContext.availableRooms()}>
-                    {(room) => (
-                      <div class='mb-2 p-2 bg-white rounded'>
-                        <strong>{room.Name}</strong> (ID:{" "}
-                        {room.RoomId.slice(0, 8)}...)
-                        <br />
-                        Created by: {room.Createdby.slice(0, 8)}...
-                        <br />
-                        Users: {room.Users?.length || 0} members
-                      </div>
-                    )}
-                  </For>
-                </Show>
-              </div>
-            </div>
-          </div>
-
-          <Show
-            when={
-              !roomContext.availableRoomsLoading() &&
-              roomContext.availableRooms().length >= 0
-            }
-            fallback={
-              <div class='flex items-center justify-center py-16'>
-                <div class='text-center'>
-                  <div class='w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse'>
-                    <Users size={24} class='text-blue-600' />
-                  </div>
-                  <p class='text-gray-500 text-lg'>
-                    Loading available rooms...
-                  </p>
-                </div>
-              </div>
-            }>
-            <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-              <For each={roomContext.availableRooms()}>
-                {(room) => (
-                  <RoomApplicationCard room={room} onApply={handleJoinRoom} />
                 )}
               </For>
             </div>
+          </div>
 
-            {/* Empty state for join rooms */}
-            <Show when={roomContext.availableRooms().length === 0}>
-              <div class='text-center py-16'>
-                <div class='w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4'>
-                  <Users size={32} class='text-green-600' />
+          <div class='mt-6 flex flex-col gap-6'>
+            <div class='relative overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-inner'>
+              <Search size={16} class='pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-slate-300' />
+              <input
+                type='text'
+                placeholder='Search rooms by name'
+                value={searchTerm()}
+                onInput={(e) => setSearchTerm(e.currentTarget.value)}
+                class='w-full rounded-2xl border border-transparent bg-transparent pl-12 pr-4 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-0'
+              />
+            </div>
+
+            <Show
+              when={filteredMyRooms().length > 0}
+              fallback={
+                <div class='flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-6 py-16 text-center text-slate-500'>
+                  <div class='mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-slate-200 bg-white text-blue-500'>
+                    <Code size={24} />
+                  </div>
+                  <h3 class='text-xl font-semibold text-slate-700'>No rooms yet</h3>
+                  <p class='mt-2 text-sm text-slate-500'>Create your first room or join an existing one to see it appear here.</p>
+                  <button
+                    class='mt-6 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-500'
+                    onClick={() => setCreateRoomModalOpen(true)}>
+                    <Plus size={16} />
+                    <span>Create a room</span>
+                  </button>
                 </div>
-                <h3 class='text-lg font-medium text-gray-900 mb-2'>
-                  No available rooms to join
-                </h3>
-                <p class='text-gray-600 mb-6'>
-                  All public rooms have been joined or you've created them all!
-                </p>
-                <button
-                  onClick={() => setCreateRoomModalOpen(true)}
-                  class='inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors duration-200'>
-                  <Plus size={18} />
-                  Create a New Room
-                </button>
+              }>
+              <div class='grid gap-6 md:grid-cols-2 xl:grid-cols-3'>
+                <For each={filteredMyRooms()}>
+                  {(room) => <RoomCard room={room} onApply={() => {}} />}
+                </For>
+              </div>
+            </Show>
+          </div>
+        </section>
+
+        <section id='explore-rooms' class='rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-2xl shadow-slate-200/60 backdrop-blur'>
+          <div class='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
+            <div>
+              <p class='text-xs font-semibold uppercase tracking-[0.4em] text-emerald-600'>Explore</p>
+              <h2 class='mt-2 text-3xl font-bold text-slate-900'>Open rooms to join</h2>
+              <p class='mt-2 max-w-2xl text-sm text-slate-600'>Handpicked rooms from across the community. Join instantly and bring your expertise to the table.</p>
+            </div>
+            <button
+              class='inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100'
+              onClick={() => roomContext.fetchAvailableRooms()}>
+              <Sparkles size={16} />
+              <span>Refresh list</span>
+            </button>
+          </div>
+
+          <Show
+            when={!roomContext.availableRoomsLoading()}
+            fallback={
+              <div class='flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/70 px-6 py-16 text-center text-emerald-600'>
+                <div class='flex h-14 w-14 items-center justify-center rounded-full border border-emerald-200 bg-white'>
+                  <Users size={22} />
+                </div>
+                <p class='text-base font-semibold'>Loading available rooms...</p>
+                <p class='text-sm text-emerald-500'>Matching you with active collaborators</p>
+              </div>
+            }>
+            <Show
+              when={roomContext.availableRooms().length > 0}
+              fallback={
+                <div class='flex flex-col items-center justify-center rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/70 px-6 py-16 text-center text-emerald-600'>
+                  <div class='flex h-14 w-14 items-center justify-center rounded-full border border-emerald-200 bg-white'>
+                    <Users size={22} />
+                  </div>
+                  <p class='mt-3 text-base font-semibold'>No public rooms right now</p>
+                  <p class='mt-1 text-sm text-emerald-500'>Be the first to start a new session for others to discover.</p>
+                  <button
+                    class='mt-6 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:bg-emerald-500'
+                    onClick={() => setCreateRoomModalOpen(true)}>
+                    <Plus size={16} />
+                    <span>Create a room</span>
+                  </button>
+                </div>
+              }>
+              <div class='mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3'>
+                <For each={roomContext.availableRooms()}>
+                  {(room) => (
+                    <RoomApplicationCard room={room} onApply={handleJoinRoom} />
+                  )}
+                </For>
               </div>
             </Show>
           </Show>
-        </Show>
-        <Show when={activeTab() === "activity"}>
-          <div class='mb-8'>
-            <div class='text-center mb-8'>
-              <div class='flex items-center justify-between mb-4'>
-                <div class='flex-1'></div>
-                <h2 class='text-2xl font-bold text-gray-900'>
-                  Recent Activity
-                </h2>
-                <div class='flex-1 flex justify-end gap-2'>
-                  <button
-                    onClick={() => {
-                      setRecentActivity(generateSampleActivities());
-                    }}
-                    class='px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors'>
-                    Load Sample
-                  </button>
-                  <button
-                    onClick={() => {
-                      ActivityTracker.clearActivities();
-                      setRecentActivity([]);
-                    }}
-                    class='px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors'>
-                    Clear
-                  </button>
-                </div>
-              </div>
-              <p class='text-gray-600'>
-                Stay updated with your latest coding sessions and room
-                activities
-              </p>
-            </div>
-          </div>
-
-          <Show
-            when={recentActivity().length > 0}
-            fallback={
-              <div class='text-center py-16'>
-                <div class='w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4'>
-                  <Activity size={32} class='text-gray-400' />
-                </div>
-                <h3 class='text-lg font-medium text-gray-900 mb-2'>
-                  No recent activity
-                </h3>
-                <p class='text-gray-600 mb-6'>
-                  Start coding in rooms to see your activity here
-                </p>
-                <button
-                  onClick={() => setActiveTab("overview")}
-                  class='inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors duration-200'>
-                  <Code size={18} />
-                  Go to Overview
-                </button>
-              </div>
-            }>
-            <div class='bg-white rounded-xl shadow-sm border border-gray-200 divide-y divide-gray-100'>
-              <For each={recentActivity()}>
-                {(activity) => <ActivityCard activity={activity} />}
-              </For>
-            </div>
-          </Show>
-        </Show>
+        </section>
       </div>
+
+      <Show when={createRoomModalOpen()}>
+        <CreateRoomModal
+          isOpen={createRoomModalOpen()}
+          onClose={() => setCreateRoomModalOpen(false)}
+          onRoomCreated={async () => {
+            await roomContext.refreshRooms();
+            await roomContext.fetchAvailableRooms();
+          }}
+        />
+      </Show>
     </div>
   );
 };

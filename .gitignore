@@ -31,26 +31,3 @@ functions/node_modules/
 functions/lib/
 functions/dist/
 
-# Local development files
-*.local
-
-# OS system files
-.DS_Store
-Thumbs.db
-
-# IDE/editor configs
-.vscode/*
-!.vscode/extensions.json
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Optional: next.js or vercel-specific
-.next/
-.vercel/
-
-# Optional: Netlify
-.netlify/

@@ -123,7 +123,7 @@ export const RoomApplicationCard: Component<Props> = (props) => {
             <Users size={14} />
           </div>
           <div class='text-sm font-semibold text-gray-900'>
-            {1 + (room.Users?.length || 0)}
+            {room.Users?.length || 0}
           </div>
           <div class='text-xs text-gray-500'>Members</div>
         </div>

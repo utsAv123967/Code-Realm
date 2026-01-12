@@ -4,6 +4,7 @@ import Login from "./Frontend/pages/Login";
 import LiveCodingRoom from "./Frontend/components/Room/CodingRoom";
 
 import Home_new from "./Frontend/pages/Home_new";
+import AboutUsPage from "./Frontend/pages/Docs";
 import Navbar from "./Frontend/components/General/Navbar";
 import Dashboard from "./Frontend/components/dashboard/Dashboard";
 import Test from "./Frontend/Test";
@@ -11,6 +12,7 @@ import ProtectedRoute from "./Frontend/components/General/ProtectedRoute";
 import AuthRedirect from "./Frontend/components/General/AuthRedirect";
 import { auth } from "./Backend/Database/firebase";
 import { RoomProvider } from "./Frontend/context/RoomContext";
+import CustomCursor from "./Frontend/components/General/CustomCursor";
 function App() {
   // Expose auth globally for debugging from root App
   if (typeof window !== "undefined") {
@@ -20,9 +22,11 @@ function App() {
 
   return (
     <>
+        <CustomCursor />
       <Navbar />
       <Router>
         <Route path='/' component={Home_new}></Route>
+        <Route path='/about' component={AboutUsPage} />
         <Route
           path='/login'
           component={() => (
